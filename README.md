@@ -64,6 +64,34 @@ Move the objects selected on an Obsidian Canvas into a **new Excalidraw drawing*
 
 这样即使你把图纸改名成 `图.md`，也不会被误当成普通笔记。
 
+### 一个细节：图纸的名字
+
+图纸的名字从选中的对象派生（文本卡片取前 10 个字符，多行会先折成一行）。派生时会做两件事，都为了**让这个名字以后还能被链接到**：
+
+**一、开头的标题标记算格式，不算内容**
+
+Markdown 里 `#` 到 `######` 后面跟空格才是标题。卡片内容若是 `# 项目计划`，图纸名就是 `项目计划` —— 标记在**截取前 10 个字符之前**去掉，所以 `# 一二三四五六七八九十` 正好取满十个字。
+
+**二、`# ^ [ ]` 出现在任何位置都换成 `_`**
+
+Obsidian 源码里的原话：
+
+> Links will not work with file names containing any of these characters: # ^ [ ] |
+
+这五个字符**能建进文件名**，但会让链接失效：`[[# 标题.excalidraw]]` 会被解析成「当前文件里的一个标题」而不是文件链接；名字中间的 `#` 还会把路径切断（`C# 教程` → `C`）。插件在磁盘非法字符（`\ / : * ? " < > |`）之外一并挡掉它们：
+
+| 卡片内容 | 图纸名 |
+|---|---|
+| `# 项目计划` | `项目计划` |
+| `C# 教程` | `C_ 教程` |
+| `数组 [0]` | `数组 _0_` |
+| `a^2` | `a_2` |
+| `#标签` | `_标签` |
+
+最后一行是因为 `#` 后面没有空格，它是**标签**不是标题，所以只换字符、不整段去掉。
+
+> **图纸里画出来的文字仍是原样**：Excalidraw 的文本元素是纯文本，不解析 Markdown，画布上那张卡片本来也显示 `# 项目计划`。转换保持忠实，只修不该坏的文件名。
+
 ### 已知限制
 
 - Canvas **没有公开 API**，所有画布操作走内部接口，Obsidian 升级后可能需要适配
@@ -110,6 +138,15 @@ Folder (with optional monthly sub-folders), text font, text colour source, namin
 
 - Canvas has **no public API**; every Canvas call goes through undocumented internals and may need adapting after an Obsidian update.
 - Drawings are recognised by extension **or** by the marker Excalidraw writes into the file, so a renamed drawing is still detected.
+
+### How a drawing gets its name
+
+The name is derived from the selected object (a text card contributes its first 10 characters, collapsed to a single line first). Two rules exist purely so the name can still be **linked to** afterwards:
+
+1. **A leading heading marker is formatting, not content.** If a card reads `# 项目计划`, the drawing is named `项目计划`. The marker is dropped *before* the 10-character cut, so `# 一二三四五六七八九十` still gets ten characters of real content.
+2. **`# ^ [ ]` become `_` anywhere in the name.** Obsidian's own source says: "Links will not work with file names containing any of these characters: # ^ [ ] |". All five are legal on disk, which is why they need handling — `[[# 标题.excalidraw]]` parses as a heading link into the *current* file, and a mid-name `#` splits the path (`C# 教程` → `C`). So `C# 教程` → `C_ 教程`, `数组 [0]` → `数组 _0_`, `a^2` → `a_2`. A tag such as `#标签` has no space after the `#` and is therefore not a heading — only its character is replaced.
+
+**The text drawn into the drawing is unchanged**: Excalidraw text elements are plain text and never parsed Markdown, and the Canvas card displayed the `#` too. The conversion stays faithful; only the unusable file name is fixed.
 
 ---
 
