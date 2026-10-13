@@ -44,6 +44,7 @@ Move the objects selected on an Obsidian Canvas into a **new Excalidraw drawing*
 
 | 设置 | 默认 | 说明 |
 |---|---|---|
+| 界面语言 | 中文 | 「自动（跟随 Obsidian）」/ 中文 / English |
 | 新建图纸的保存路径 | `Z附件库/Excalidraw` | 留空表示沿用 Excalidraw 插件设置里的目录 |
 | 按月分文件夹 | 开 | 在路径下再建 `YYYY-MM` 子目录 |
 | 文本卡片字体 | Lilita One | Excalidraw 的 9 个内置字体 |
@@ -87,6 +88,12 @@ Select objects on a Canvas (images, text cards, Markdown notes, other Excalidraw
 - The **Excalidraw** community plugin installed and enabled (id must be `obsidian-excalidraw-plugin`)
 
 Without Excalidraw nothing crashes: the plugin reports the problem and changes nothing.
+
+### Language
+
+The interface is available in Chinese and English. The setting has three values — **Automatic** (follow Obsidian's own language), **中文**, and **English** — and ships defaulting to Chinese.
+
+Detection reads `localStorage["language"]` (the key Obsidian itself uses) and falls back to `window.moment.locale()`, then to the OS locale. Any non-Chinese language resolves to English.
 
 ### Install
 

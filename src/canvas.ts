@@ -18,6 +18,7 @@ import type {
 	CanvasNodeData,
 	CanvasNodeInstanceLike,
 } from "./types";
+import { t } from "./i18n";
 
 /**
  * Bounding box of a set of Canvas nodes, in Canvas coordinates.
@@ -206,9 +207,7 @@ export async function commitCanvasData(
 	data: CanvasData
 ): Promise<void> {
 	if (typeof canvas.setData !== "function") {
-		throw new CanvasUnavailableError(
-			"当前 Obsidian 版本的 Canvas 缺少 setData()，无法写回画布。"
-		);
+		throw new CanvasUnavailableError(t("error.canvasSetDataMissing"));
 	}
 	await canvas.setData(data);
 	if (typeof canvas.requestSave === "function") {
@@ -225,13 +224,11 @@ export async function commitCanvasData(
  */
 export function readCanvasData(canvas: CanvasLike): CanvasData {
 	if (typeof canvas.getData !== "function") {
-		throw new CanvasUnavailableError(
-			"当前 Obsidian 版本的 Canvas 缺少 getData()，无法读取画布。"
-		);
+		throw new CanvasUnavailableError(t("error.canvasGetDataMissing"));
 	}
 	const data = canvas.getData();
 	if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
-		throw new CanvasUnavailableError("Canvas 返回的数据结构无法识别。");
+		throw new CanvasUnavailableError(t("error.canvasDataUnrecognized"));
 	}
 	return data;
 }
@@ -328,7 +325,7 @@ export function createCanvasNodeId(taken: Set<string>): string {
 		const candidate = randomHexId();
 		if (!taken.has(candidate)) return candidate;
 	}
-	throw new CanvasUnavailableError("无法为画布节点生成唯一 id。");
+	throw new CanvasUnavailableError(t("error.nodeIdUnavailable"));
 }
 
 /**

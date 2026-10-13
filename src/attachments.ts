@@ -26,6 +26,7 @@
  */
 
 import type { TFile } from "obsidian";
+import { t } from "./i18n";
 
 /** How Canvas file nodes that are not plain images are treated. */
 export type NonImageMode = "skip" | "markdown" | "markdown-and-pdf";
@@ -244,20 +245,27 @@ export function wantsSizeAnchor(kind: EmbedKind): boolean {
 	return kind === "image";
 }
 
-/** Human-readable label for an embed kind, for skip messages. */
-const KIND_LABELS: Record<EmbedKind, string> = {
-	image: "图片",
-	drawing: "图纸",
-	markdown: "笔记",
-	pdf: "PDF",
-};
-
 /**
  * Names an embed kind for user-facing text.
  *
+ * Resolved per call rather than from a module-level table: a constant holding
+ * `t()` results would be frozen at import time, before the language setting is
+ * applied.
+ *
  * @param kind - The embed kind.
- * @returns A short Chinese label.
+ * @returns A short label in the current language.
  */
 export function embedKindLabel(kind: EmbedKind): string {
-	return KIND_LABELS[kind];
+	switch (kind) {
+		case "image":
+			return t("kind.image");
+		case "drawing":
+			return t("kind.drawing");
+		case "markdown":
+			return t("kind.markdown");
+		default:
+			// "PDF" is an acronym that reads the same in both languages, so it
+			// is deliberately not a translated string.
+			return "PDF";
+	}
 }

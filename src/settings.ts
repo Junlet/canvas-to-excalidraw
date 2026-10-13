@@ -17,6 +17,13 @@
 
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type CanvasToExcalidrawPlugin from "./main";
+import {
+	isLanguageSetting,
+	setLanguage,
+	t,
+	type LanguageSetting,
+	type MessageKey,
+} from "./i18n";
 import { isEdgePolicy, type EdgePolicy } from "./edges";
 import { isNamingAnchor, type NamingAnchor } from "./canvas";
 import { isTextColorMode, type TextColorMode } from "./colors";
@@ -28,12 +35,35 @@ import {
 	resolveDrawingFolder,
 } from "./folders";
 
+/**
+ * The language dropdown rows, in display order.
+ *
+ * Written out rather than derived from the setting values so the keys stay
+ * checked: a typo here is a compile error, not a missing string at runtime.
+ */
+const LANGUAGE_ROWS: ReadonlyArray<{
+	value: LanguageSetting;
+	key: MessageKey;
+}> = [
+	{ value: "auto", key: "settings.language.auto" },
+	{ value: "zh", key: "settings.language.zh" },
+	{ value: "en", key: "settings.language.en" },
+];
+
 /** A selectable Excalidraw font. */
 export interface FontOption {
 	/** Numeric `fontFamily` value Excalidraw stores on the element. */
 	value: number;
-	/** Name shown in the settings dropdown. */
+	/** Font name shown in the settings dropdown. A proper noun, untranslated. */
 	label: string;
+	/**
+	 * Message key for the note appended to {@link label}, when the font needs
+	 * one.
+	 *
+	 * Kept as a key rather than a string so it is resolved while the settings
+	 * pane is being drawn, not when this module is imported.
+	 */
+	noteKey?: MessageKey;
 	/**
 	 * Whether the font ships with glyphs for CJK text.
 	 *
@@ -51,10 +81,10 @@ export interface FontOption {
  * No built-in font covers CJK, hence `cjk: false` throughout.
  */
 export const FONT_OPTIONS: FontOption[] = [
-	{ value: 1, label: "Virgil（手绘）", cjk: false },
+	{ value: 1, label: "Virgil", noteKey: "font.virgilNote", cjk: false },
 	{ value: 2, label: "Helvetica", cjk: false },
-	{ value: 3, label: "Cascadia（代码）", cjk: false },
-	{ value: 4, label: "Local Font（仓库内自定义字体）", cjk: false },
+	{ value: 3, label: "Cascadia", noteKey: "font.cascadiaNote", cjk: false },
+	{ value: 4, label: "Local Font", noteKey: "font.localNote", cjk: false },
 	{ value: 5, label: "Excalifont", cjk: false },
 	{ value: 6, label: "Nunito", cjk: false },
 	{ value: 7, label: "Lilita One", cjk: false },
@@ -62,8 +92,22 @@ export const FONT_OPTIONS: FontOption[] = [
 	{ value: 9, label: "Liberation Sans", cjk: false },
 ];
 
+/**
+ * Builds the label shown for a font in the dropdown.
+ *
+ * @param option - The font.
+ * @returns The font's name, plus its translated note when it has one.
+ */
+function formatFontLabel(option: FontOption): string {
+	return option.noteKey
+		? option.label + t(option.noteKey)
+		: option.label;
+}
+
 /** Persisted plugin settings. */
 export interface CanvasToExcalidrawSettings {
+	/** Interface language: follow Obsidian, or pin Chinese / English. */
+	language: LanguageSetting;
 	/** `fontFamily` applied to text cards moved into a drawing. */
 	textFontFamily: number;
 	/** What happens to arrows that touched a moved node. */
@@ -132,8 +176,15 @@ const DEFAULT_NON_IMAGE_MODE: NonImageMode = "markdown";
  */
 const DEFAULT_MONTH_SUBFOLDERS = true;
 
-/** Settings used on first install and for any missing key. */
+/**
+ * Settings used on first install and for any missing key.
+ *
+ * `language` defaults to `"zh"` rather than `"auto"` on purpose: it keeps the
+ * wording of an existing install byte-for-byte what it was before the language
+ * setting existed.
+ */
 export const DEFAULT_SETTINGS: CanvasToExcalidrawSettings = {
+	language: "zh",
 	textFontFamily: DEFAULT_FONT_FAMILY,
 	edgePolicy: DEFAULT_EDGE_POLICY,
 	namingAnchor: DEFAULT_NAMING_ANCHOR,
@@ -167,6 +218,9 @@ export function normalizeSettings(
 	stored: Partial<CanvasToExcalidrawSettings> | null
 ): CanvasToExcalidrawSettings {
 	const merged = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
+	if (!isLanguageSetting(merged.language)) {
+		merged.language = DEFAULT_SETTINGS.language;
+	}
 	if (!isKnownFontFamily(merged.textFontFamily)) {
 		merged.textFontFamily = DEFAULT_SETTINGS.textFontFamily;
 	}
@@ -213,7 +267,7 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 	private renderFolderSettings(containerEl: HTMLElement): void {
 		const preview = (): string => {
 			if (normalizeVaultFolder(this.plugin.settings.drawingFolder).length === 0) {
-				return "（沿用 Excalidraw 插件设置里的目录）";
+				return t("settings.folder.inherited");
 			}
 			const resolved = resolveDrawingFolder(
 				this.plugin.settings.drawingFolder,
@@ -227,19 +281,15 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 
 		const refresh = (): void => {
 			folderSetting.setDesc(
-				`新图纸会保存到这里：${preview()}。` +
-					"留空表示沿用 Excalidraw 插件设置里的目录；" +
-					"文件夹不存在时会自动创建。"
+				t("settings.folder.desc", { path: preview() })
 			);
 			monthSetting.setDesc(
-				"开启后，会在上面的路径下再建一个 `YYYY-MM` 文件夹，" +
-					"让每个月的图纸归到一起。" +
-					`当前将会保存到：${preview()}`
+				t("settings.folder.monthDesc", { path: preview() })
 			);
 		};
 
 		folderSetting = new Setting(containerEl)
-			.setName("新建图纸的保存路径")
+			.setName(t("settings.folder.name"))
 			.addText((text) =>
 				text
 					.setPlaceholder(DEFAULT_DRAWING_FOLDER)
@@ -252,7 +302,7 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			);
 
 		monthSetting = new Setting(containerEl)
-			.setName("按月分文件夹")
+			.setName(t("settings.folder.monthName"))
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.monthSubfolders)
@@ -270,17 +320,39 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		// The language row comes first so it is reachable even when the rest of
+		// the pane is in a language the user cannot read.
+		new Setting(containerEl)
+			.setName(t("settings.language.name"))
+			.setDesc(t("settings.language.desc"))
+			.addDropdown((dropdown) => {
+				for (const row of LANGUAGE_ROWS) {
+					dropdown.addOption(row.value, t(row.key));
+				}
+				dropdown
+					.setValue(this.plugin.settings.language)
+					.onChange(async (value) => {
+						this.plugin.settings.language = isLanguageSetting(value)
+							? value
+							: DEFAULT_SETTINGS.language;
+						await this.plugin.saveSettings();
+						setLanguage(this.plugin.settings.language);
+						// Re-render so the rest of the pane follows immediately.
+						this.display();
+					});
+			});
+
 		this.renderFolderSettings(containerEl);
 
 		new Setting(containerEl)
-			.setName("文本卡片字体")
-			.setDesc(
-				"移入 Excalidraw 的文本卡片使用的字体。这些都是 Excalidraw 内置字体，无需在仓库里放字体文件。" +
-					"注意：内置字体只覆盖拉丁字母，中文会回退到系统字体。"
-			)
+			.setName(t("settings.font.name"))
+			.setDesc(t("settings.font.desc"))
 			.addDropdown((dropdown) => {
 				for (const option of FONT_OPTIONS) {
-					dropdown.addOption(String(option.value), option.label);
+					dropdown.addOption(
+						String(option.value),
+						formatFontLabel(option)
+					);
 				}
 				dropdown
 					.setValue(String(this.plugin.settings.textFontFamily))
@@ -296,17 +368,18 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("非图片文件（笔记 / PDF）")
-			.setDesc(
-				"画布上的文件节点如果指向的是 Markdown 笔记而不是图片，怎么处理。" +
-					"选「笔记以图像形式嵌入」会调用 Excalidraw 插件自己的渲染（就是它「嵌入文件 → 以图像形式」那条路径），" +
-					"把笔记渲染成图片放进图纸——不需要先打开一个 Excalidraw 视图。" +
-					"整篇笔记会被渲染（相当于「显示全部」），暂不支持只嵌入某个章节。"
-			)
+			.setName(t("settings.nonImage.name"))
+			.setDesc(t("settings.nonImage.desc"))
 			.addDropdown((dropdown) => {
-				dropdown.addOption("skip", "跳过（只移入图片）");
-				dropdown.addOption("markdown", "笔记以图像形式嵌入");
-				dropdown.addOption("markdown-and-pdf", "笔记 + PDF 都以图像形式嵌入");
+				dropdown.addOption("skip", t("settings.nonImage.skip"));
+				dropdown.addOption(
+					"markdown",
+					t("settings.nonImage.markdown")
+				);
+				dropdown.addOption(
+					"markdown-and-pdf",
+					t("settings.nonImage.markdownAndPdf")
+				);
 				dropdown
 					.setValue(this.plugin.settings.nonImageMode)
 					.onChange(async (value) => {
@@ -318,16 +391,15 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("文本卡片颜色")
-			.setDesc(
-				"画布上的文字卡片如果有颜色，怎么带进 Excalidraw。" +
-					"颜色取自 Obsidian 自己的 --canvas-color-1~6 变量（1 红 2 橙 3 黄 4 绿 5 青 6 紫），所以会跟随你当前的主题。" +
-					"没有设过颜色的卡片保持 Excalidraw 默认。"
-			)
+			.setName(t("settings.textColor.name"))
+			.setDesc(t("settings.textColor.desc"))
 			.addDropdown((dropdown) => {
-				dropdown.addOption("text", "跟随画布颜色 → 作为文字颜色");
-				dropdown.addOption("background", "跟随画布颜色 → 作为文字背景色");
-				dropdown.addOption("ignore", "不处理，用 Excalidraw 默认");
+				dropdown.addOption("text", t("settings.textColor.text"));
+				dropdown.addOption(
+					"background",
+					t("settings.textColor.background")
+				);
+				dropdown.addOption("ignore", t("settings.textColor.ignore"));
 				dropdown
 					.setValue(this.plugin.settings.textColorMode)
 					.onChange(async (value) => {
@@ -339,15 +411,11 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("命名依据")
-			.setDesc(
-				"选中多个对象时，用哪个对象的名字给新图纸命名。" +
-					"「最上面的」按纵坐标最小选，「最左边的」按横坐标最小选；" +
-					"两者都会用另一个轴做平局判定。文字卡片取前 10 个字。"
-			)
+			.setName(t("settings.naming.name"))
+			.setDesc(t("settings.naming.desc"))
 			.addDropdown((dropdown) => {
-				dropdown.addOption("topmost", "最上面的对象");
-				dropdown.addOption("leftmost", "最左边的对象");
+				dropdown.addOption("topmost", t("settings.naming.topmost"));
+				dropdown.addOption("leftmost", t("settings.naming.leftmost"));
 				dropdown
 					.setValue(this.plugin.settings.namingAnchor)
 					.onChange(async (value) => {
@@ -359,12 +427,8 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("把箭头也移进图纸")
-			.setDesc(
-				"选中范围内的箭头（两端都被选中的）会在 Excalidraw 里重建成真正的绑定箭头，" +
-					"方向与连接边（上/下/左/右）都按画布上的原样保留。" +
-					"关闭后图纸里只有图片和文字，不会有箭头。"
-			)
+			.setName(t("settings.moveEdges.name"))
+			.setDesc(t("settings.moveEdges.desc"))
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.moveEdgesIntoDrawing)
@@ -375,16 +439,14 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("箭头（边）处理")
-			.setDesc(
-				"被移走的节点上连着的箭头怎么办。" +
-					"「改接到新文件」无损：外部箭头会重新指向新建的图纸节点，流程图不会断。" +
-					"「直接删除」更干净：但会让经过这些节点的连线消失。" +
-					"两端都在选区里的箭头无论选哪个都会被删除（它已经变成图纸内部的关系）。"
-			)
+			.setName(t("settings.edgePolicy.name"))
+			.setDesc(t("settings.edgePolicy.desc"))
 			.addDropdown((dropdown) => {
-				dropdown.addOption("reconnect", "改接到新文件（无损）");
-				dropdown.addOption("delete", "直接删除");
+				dropdown.addOption(
+					"reconnect",
+					t("settings.edgePolicy.reconnect")
+				);
+				dropdown.addOption("delete", t("settings.edgePolicy.delete"));
 				dropdown
 					.setValue(this.plugin.settings.edgePolicy)
 					.onChange(async (value) => {
@@ -396,10 +458,7 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("中文显示说明")
-			.setDesc(
-				"Lilita One 等内置字体没有中文字形，中文会由系统字体回退渲染。" +
-					"若要让中文也用统一字体，可在 Excalidraw 插件设置里开启本地 CJK 字体。"
-			);
+			.setName(t("settings.cjk.name"))
+			.setDesc(t("settings.cjk.desc"));
 	}
 }

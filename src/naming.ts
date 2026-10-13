@@ -37,8 +37,20 @@ export const TEXT_NAME_LENGTH = 10;
 /** Replacement for every character that cannot appear in a file name. */
 export const ILLEGAL_CHAR_REPLACEMENT = "_";
 
-/** Used when a derived name sanitises down to nothing usable. */
-export const FALLBACK_NAME = "未命名 Excalidraw";
+/**
+ * Used when a derived name sanitises down to nothing usable.
+ *
+ * Deliberately NOT translated. This string becomes a real file name inside the
+ * vault, and vault-facing strings follow the same rule as
+ * `DEFAULT_DRAWING_FOLDER` in `folders.ts`: they do not change with the
+ * interface language. Keeping it fixed also means a drawing created today and
+ * one created after switching to English get the same name.
+ *
+ * @returns The fallback drawing name.
+ */
+export function fallbackName(): string {
+	return "未命名 Excalidraw";
+}
 
 /** Cap on collision suffixes before falling back to a timestamp. */
 const MAX_COLLISION_ATTEMPTS = 200;
@@ -105,7 +117,7 @@ export function deriveNameFromFilePath(vaultPath: string): string {
  * expose a new trailing space.
  *
  * @param raw - Candidate name, already trimmed of any extension.
- * @returns A safe, meaningful name, or {@link FALLBACK_NAME} otherwise.
+ * @returns A safe, meaningful name, or {@link fallbackName} otherwise.
  */
 export function sanitizeBaseName(raw: string): string {
 	const collapsed = normalizeWhitespace(raw);
@@ -115,7 +127,7 @@ export function sanitizeBaseName(raw: string): string {
 	);
 	const trimmed = replaced.replace(TRAILING_DOT_OR_SPACE, "");
 	if (!isUsableBaseName(trimmed) || MEANINGLESS_NAME.test(trimmed)) {
-		return FALLBACK_NAME;
+		return fallbackName();
 	}
 	return trimmed;
 }
@@ -145,7 +157,7 @@ export function isUsableBaseName(name: string): boolean {
 export function prepareDrawingBaseName(raw: string): string {
 	const sanitized = sanitizeBaseName(raw);
 	const withoutMarkdown = sanitized.replace(MARKDOWN_SUFFIX, "");
-	return isUsableBaseName(withoutMarkdown) ? withoutMarkdown : FALLBACK_NAME;
+	return isUsableBaseName(withoutMarkdown) ? withoutMarkdown : fallbackName();
 }
 
 /**

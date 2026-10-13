@@ -40,13 +40,14 @@ import {
 } from "./canvas";
 import type { CanvasBounds } from "./canvas";
 import {
-	FALLBACK_NAME,
 	buildDrawingPath,
 	deriveNameFromFilePath,
 	deriveNameFromText,
+	fallbackName,
 	prepareDrawingBaseName,
 	resolveUniqueBaseName,
 } from "./naming";
+import { setLanguage, t } from "./i18n";
 import {
 	NothingToMoveError,
 	acquireExcalidraw,
@@ -74,8 +75,17 @@ import {
 /** Stable command id -- must never change once released. */
 const COMMAND_ID = "move-selection-into-new-excalidraw";
 
-/** Label shared by the command and the context-menu entry. */
-const COMMAND_NAME = "把选中的内容移入新的 Excalidraw 文件";
+/**
+ * Label shared by the command and the context-menu entry.
+ *
+ * A function rather than a constant: a module-level `t()` call would be
+ * evaluated at import time, before the language setting has been applied.
+ *
+ * @returns The command label in the current language.
+ */
+function commandName(): string {
+	return t("command.moveSelection");
+}
 
 /** Lucide icon used for the context-menu entry. */
 const MENU_ICON = "pen-tool";
@@ -101,11 +111,12 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+		setLanguage(this.settings.language);
 		this.addSettingTab(new CanvasToExcalidrawSettingTab(this.app, this));
 
 		this.addCommand({
 			id: COMMAND_ID,
-			name: COMMAND_NAME,
+			name: commandName(),
 			// Shown whenever a Canvas is active; `run()` explains the rest, which
 			// keeps the command discoverable instead of silently vanishing.
 			checkCallback: (checking: boolean) => {
@@ -175,7 +186,7 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 
 		menu.addItem((item) =>
 			item
-				.setTitle(COMMAND_NAME)
+				.setTitle(commandName())
 				.setIcon(MENU_ICON)
 				.onClick(() => {
 					void this.run(canvas, this.findFileForCanvas(canvas), nodes);
@@ -260,19 +271,19 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 	): Promise<void> {
 		try {
 			if (canvas.readonly) {
-				new Notice("这个画布是只读的，无法修改。");
+				new Notice(t("notice.readonly"));
 				return;
 			}
 
 			if (nodes.length === 0) {
-				new Notice("请先在画布中选中至少一个对象。");
+				new Notice(t("notice.nothingSelected"));
 				return;
 			}
 
 			// Writing canvas data while a node has focus discards the user's
 			// in-progress edit, so refuse before doing anything else.
 			if (hasEditingNode(canvas)) {
-				new Notice("有节点正在编辑中，请先点一下画布空白处结束编辑。");
+				new Notice(t("notice.editing"));
 				return;
 			}
 
@@ -283,14 +294,14 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 
 			const bridge = acquireExcalidraw(this.app);
 			if (!bridge) {
-				new Notice("未找到已启用的 Excalidraw 插件，请先安装并启用它。");
+				new Notice(t("notice.excalidrawMissing"));
 				return;
 			}
 
 			const bounds = computeBounds(nodes);
 			const namingNode = pickNamingNode(nodes, this.settings.namingAnchor);
 			const baseName = prepareDrawingBaseName(
-				namingNode ? deriveRawName(namingNode) : FALLBACK_NAME
+				namingNode ? deriveRawName(namingNode) : fallbackName()
 			);
 			const selectedIds = new Set(nodes.map((node) => node.id));
 			const internalEdges = this.settings.moveEdgesIntoDrawing
@@ -343,8 +354,10 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 
 			new Notice(buildSuccessMessage(result, uniqueName, reconciliation));
 		} catch (error) {
-			console.error("[canvas-to-excalidraw] 移入失败", error);
-			new Notice(`移入失败：${describeError(error)}`);
+			console.error("[canvas-to-excalidraw] " + t("log.moveFailed"), error);
+			new Notice(
+				t("notice.moveFailed", { reason: describeError(error) })
+			);
 		}
 	}
 
@@ -422,7 +435,8 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 				if (plugin.isExcalidrawFile(file)) return true;
 			} catch (error) {
 				console.error(
-					"[canvas-to-excalidraw] isExcalidrawFile() 抛错，回退到元数据判定",
+					"[canvas-to-excalidraw] " +
+						t("log.isExcalidrawFileFailed"),
 					error
 				);
 			}
@@ -432,7 +446,10 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 			const cache = this.app.metadataCache.getFileCache(file);
 			return marksDrawing(cache?.frontmatter, cache?.tags);
 		} catch (error) {
-			console.error("[canvas-to-excalidraw] 读取元数据失败", error);
+			console.error(
+				"[canvas-to-excalidraw] " + t("log.readMetadataFailed"),
+				error
+			);
 			return false;
 		}
 	}
@@ -469,7 +486,7 @@ function deriveRawName(node: CanvasNodeData): string {
 		case "link":
 			return deriveNameFromText(node.url ?? "");
 		default:
-			return FALLBACK_NAME;
+			return fallbackName();
 	}
 }
 
@@ -487,23 +504,38 @@ function buildSuccessMessage(
 	reconciliation: EdgeReconciliation
 ): string {
 	const parts: string[] = [];
-	if (result.imageCount > 0) parts.push(`${result.imageCount} 张图片`);
-	if (result.drawingCount > 0) parts.push(`${result.drawingCount} 个图纸`);
-	if (result.noteCount > 0) parts.push(`${result.noteCount} 篇笔记`);
-	if (result.textCount > 0) parts.push(`${result.textCount} 个文本卡片`);
-	if (result.arrowCount > 0) parts.push(`${result.arrowCount} 条箭头`);
-	const moved = parts.length > 0 ? parts.join(" + ") : "内容";
+	if (result.imageCount > 0) {
+		parts.push(t("summary.image", { count: result.imageCount }));
+	}
+	if (result.drawingCount > 0) {
+		parts.push(t("summary.drawing", { count: result.drawingCount }));
+	}
+	if (result.noteCount > 0) {
+		parts.push(t("summary.note", { count: result.noteCount }));
+	}
+	if (result.textCount > 0) {
+		parts.push(t("summary.textCard", { count: result.textCount }));
+	}
+	if (result.arrowCount > 0) {
+		parts.push(t("summary.arrow", { count: result.arrowCount }));
+	}
+	const moved = parts.length > 0 ? parts.join(" + ") : t("summary.none");
 
-	let message = `已把 ${moved} 移入「${name}.excalidraw.md」`;
+	let message = t("summary.moved", { moved, name });
 
 	if (reconciliation.reconnected > 0) {
-		message += `；${reconciliation.reconnected} 条箭头已改接到新节点`;
+		message += t("summary.reconnected", {
+			count: reconciliation.reconnected,
+		});
 	}
 	if (reconciliation.dropped > 0) {
-		message += `；移除了 ${reconciliation.dropped} 条箭头`;
+		message += t("summary.dropped", { count: reconciliation.dropped });
 	}
 	if (result.skipped.length > 0) {
-		message += `；跳过 ${result.skipped.length} 项（${result.skipped.join("，")}）`;
+		message += t("summary.skipped", {
+			count: result.skipped.length,
+			reasons: result.skipped.join(t("common.listSeparator")),
+		});
 	}
 	return message;
 }

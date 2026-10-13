@@ -22,6 +22,7 @@ import type {
 } from "./types";
 import type { CanvasBounds } from "./canvas";
 import type { InternalEdge } from "./edges";
+import { t } from "./i18n";
 import { resolveTextColors, type TextColorMode } from "./colors";
 import {
 	allowsUpscale,
@@ -150,7 +151,7 @@ async function ensureFolder(app: App, folder: string): Promise<void> {
 		// createFolder throws when the folder appeared in the meantime, which
 		// is not a failure worth reporting.
 		console.warn(
-			"[canvas-to-excalidraw] 创建文件夹时出错（可能已存在）：",
+			"[canvas-to-excalidraw] " + t("log.createFolderFailed"),
 			folder,
 			error
 		);
@@ -327,7 +328,7 @@ export async function createDrawingFromSelection(
 			if (node.type === "text") {
 				const text = typeof node.text === "string" ? node.text : "";
 				if (text.trim().length === 0) {
-					skipped.push("空白文本卡片");
+					skipped.push(t("skip.emptyTextCard"));
 					continue;
 				}
 				const colors = resolveTextColors(
@@ -353,7 +354,11 @@ export async function createDrawingFromSelection(
 					? resolveVaultFile(app, vaultPath, options.sourcePath)
 					: null;
 				if (!file) {
-					skipped.push(`找不到文件：${vaultPath || "(空)"}`);
+					skipped.push(
+						t("skip.fileNotFound", {
+							path: vaultPath || t("common.empty"),
+						})
+					);
 					continue;
 				}
 
@@ -376,14 +381,18 @@ export async function createDrawingFromSelection(
 						extension === "pdf";
 					skipped.push(
 						gated
-							? `${
-									isDrawingFile(file, options.drawingProbe)
-										? "图纸"
+							? t("skip.notEmbedded", {
+									kind: isDrawingFile(
+										file,
+										options.drawingProbe
+									)
+										? t("kind.drawing")
 										: extension === "pdf"
 											? "PDF"
-											: "笔记"
-								}未嵌入（已在设置里关闭）：${file.name}`
-							: `不支持的文件类型，已跳过：${file.name}`
+											: t("kind.markdown"),
+									name: file.name,
+								})
+							: t("skip.unsupportedType", { name: file.name })
 					);
 					continue;
 				}
@@ -405,7 +414,7 @@ export async function createDrawingFromSelection(
 					);
 				}
 				if (!elementId) {
-					skipped.push(`渲染失败，已跳过：${file.name}`);
+					skipped.push(t("skip.renderFailed", { name: file.name }));
 					continue;
 				}
 				fitElementToBox(
@@ -427,14 +436,14 @@ export async function createDrawingFromSelection(
 			}
 
 			skipped.push(
-				node.type === "link" ? "链接卡片" : `不支持的节点类型：${node.type}`
+				node.type === "link"
+					? t("skip.linkCard")
+					: t("skip.unsupportedNode", { type: node.type })
 			);
 		}
 
 		if (imageCount + drawingCount + noteCount + textCount === 0) {
-			throw new NothingToMoveError(
-				"选中的内容里没有可移动的图片、图纸、笔记或文本卡片。"
-			);
+			throw new NothingToMoveError(t("error.nothingToMove"));
 		}
 
 		// Arrows are staged last so both endpoints already exist on the
@@ -444,7 +453,7 @@ export async function createDrawingFromSelection(
 			const toId = elementIds.get(edge.to);
 			if (!fromId || !toId) {
 				// An endpoint was skipped (missing image, empty card, ...).
-				skipped.push("一条箭头因端点未移入而省略");
+				skipped.push(t("skip.arrowEndpointMissing"));
 				continue;
 			}
 			try {
@@ -461,7 +470,7 @@ export async function createDrawingFromSelection(
 					"[canvas-to-excalidraw] connectObjects() failed",
 					error
 				);
-				skipped.push("一条箭头创建失败");
+				skipped.push(t("skip.arrowCreateFailed"));
 			}
 		}
 
@@ -477,7 +486,7 @@ export async function createDrawingFromSelection(
 		const file = await waitForVaultFile(app, createdPath);
 		if (!file) {
 			throw new ExcalidrawUnavailableError(
-				`Excalidraw 未能在预期时间内创建文件：${createdPath}`
+				t("error.drawingNotCreated", { path: createdPath })
 			);
 		}
 
