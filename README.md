@@ -90,6 +90,15 @@ Obsidian 源码里的原话：
 
 最后一行是因为 `#` 后面没有空格，它是**标签**不是标题，所以只换字符、不整段去掉。
 
+**三、末尾的图纸 / Markdown 扩展名会剥掉**
+
+Excalidraw 的 `create()` **只在名字不以 `.md` 结尾时**才追加 `.excalidraw.md`。这一条规则会往两个相反的方向出错，所以收口处会把末尾的 `.excalidraw.md`、`.excalidraw`、`.md` **反复剥掉**（已重复的名字也会被纠正）：
+
+| 派生出的名字 | 修复前生成 | 修复后生成 |
+|---|---|---|
+| `图.excalidraw` | `图.excalidraw.excalidraw.md` | `图.excalidraw.md` |
+| `readme.md` | 普通笔记 `readme.md`，不是图纸 | `readme.excalidraw.md` |
+
 > **图纸里画出来的文字仍是原样**：Excalidraw 的文本元素是纯文本，不解析 Markdown，画布上那张卡片本来也显示 `# 项目计划`。转换保持忠实，只修不该坏的文件名。
 
 ### 已知限制
@@ -145,6 +154,7 @@ The name is derived from the selected object (a text card contributes its first 
 
 1. **A leading heading marker is formatting, not content.** If a card reads `# 项目计划`, the drawing is named `项目计划`. The marker is dropped *before* the 10-character cut, so `# 一二三四五六七八九十` still gets ten characters of real content.
 2. **`# ^ [ ]` become `_` anywhere in the name.** Obsidian's own source says: "Links will not work with file names containing any of these characters: # ^ [ ] |". All five are legal on disk, which is why they need handling — `[[# 标题.excalidraw]]` parses as a heading link into the *current* file, and a mid-name `#` splits the path (`C# 教程` → `C`). So `C# 教程` → `C_ 教程`, `数组 [0]` → `数组 _0_`, `a^2` → `a_2`. A tag such as `#标签` has no space after the `#` and is therefore not a heading — only its character is replaced.
+3. **A trailing drawing/Markdown extension is stripped.** Excalidraw's `create()` appends `.excalidraw.md` *only when the name does not already end in `.md`*, and that one rule fails in two opposite directions. Name preparation therefore strips `.excalidraw.md`, `.excalidraw` and `.md` repeatedly, so `图.excalidraw` no longer becomes `图.excalidraw.excalidraw.md`, and `readme.md` still becomes `readme` (otherwise you would get a plain Markdown note instead of a drawing).
 
 **The text drawn into the drawing is unchanged**: Excalidraw text elements are plain text and never parsed Markdown, and the Canvas card displayed the `#` too. The conversion stays faithful; only the unusable file name is fixed.
 

@@ -1,6 +1,6 @@
 {
   "name": "canvas-to-excalidraw",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Move selected Canvas nodes into a new Excalidraw drawing and replace them with a link to it.",
   "main": "main.js",
   "scripts": {
