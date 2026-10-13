@@ -498,6 +498,22 @@ function deriveRawName(node: CanvasNodeData): string {
  * @param reconciliation - How the Canvas's edges were reconciled.
  * @returns A single-line summary.
  */
+/**
+ * Folder portion of a vault path, for the success notice.
+ *
+ * Taken from the path Excalidraw actually created rather than from the
+ * configured folder, so the notice reports where the file really landed --
+ * which is the only way someone using "按月分文件夹" can tell that the setting
+ * took effect, since the notice would otherwise show the file name alone.
+ *
+ * @param vaultPath - Full vault path of the created drawing.
+ * @returns The containing folder, or `""` for the vault root.
+ */
+function drawingFolderOf(vaultPath: string): string {
+	const index = vaultPath.lastIndexOf("/");
+	return index > 0 ? vaultPath.slice(0, index) : "";
+}
+
 function buildSuccessMessage(
 	result: DrawingResult,
 	name: string,
@@ -522,6 +538,11 @@ function buildSuccessMessage(
 	const moved = parts.length > 0 ? parts.join(" + ") : t("summary.none");
 
 	let message = t("summary.moved", { moved, name });
+
+	const folder = drawingFolderOf(result.path);
+	if (folder) {
+		message += t("summary.savedTo", { folder });
+	}
 
 	if (reconciliation.reconnected > 0) {
 		message += t("summary.reconnected", {

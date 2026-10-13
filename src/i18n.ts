@@ -70,6 +70,12 @@ const zh = {
 	"summary.arrow": "{count} 条箭头",
 	"summary.none": "内容",
 	"summary.moved": "已把 {moved} 移入「{name}.excalidraw.md」",
+	/**
+	 * Names the folder the drawing landed in. Without it a "按月分文件夹" user
+	 * has no way to tell whether the setting took effect, since the notice
+	 * otherwise shows the file name only.
+	 */
+	"summary.savedTo": "，存到 {folder}/",
 	"summary.reconnected": "；{count} 条箭头已改接到新节点",
 	"summary.dropped": "；移除了 {count} 条箭头",
 	"summary.skipped": "；跳过 {count} 项（{reasons}）",
@@ -233,6 +239,8 @@ const en: Record<MessageKey, string> = {
 	"summary.arrow": "{count} arrow(s)",
 	"summary.none": "content",
 	"summary.moved": 'Moved {moved} into "{name}.excalidraw.md"',
+	/** Names the folder the drawing landed in; see the Chinese table. */
+	"summary.savedTo": ", saved to {folder}/",
 	"summary.reconnected": "; {count} arrow(s) reconnected to the new node",
 	"summary.dropped": "; {count} arrow(s) removed",
 	"summary.skipped": "; {count} item(s) skipped ({reasons})",
