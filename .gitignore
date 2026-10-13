@@ -1,0 +1,6 @@
+﻿node_modules/
+.npm-cache/
+data.json
+main.js.map
+*.js.map
+*.log

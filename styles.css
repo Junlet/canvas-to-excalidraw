@@ -1,0 +1,4 @@
+/* canvas-to-excalidraw carries no custom UI: every surface it touches is either
+   Obsidian's own context menu or the Excalidraw plugin's own renderer.
+   Kept as an empty-but-present file because the release contract expects
+   main.js + manifest.json + styles.css to ship together. */
