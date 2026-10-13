@@ -10,10 +10,39 @@
  * (`/ \ : * ? " < > |`), sanitising is not cosmetic here -- without it the
  * drawing simply fails to be created. Every illegal character becomes `_`
  * so the name keeps its original length and stays predictable.
+ *
+ * A second, quieter class of character needs the same treatment: Obsidian
+ * itself warns that "Links will not work with file names containing any of
+ * these characters: # ^ [ ] |". Such a name *is* created, but it can never be
+ * reached by a wikilink -- `[[# 标题.excalidraw]]` parses as a heading link
+ * into the current file, and a mid-name `#` (as in `C# 教程`) splits the path.
+ * A drawing nobody can link to is not worth generating, so those characters
+ * are replaced as well. See {@link UNSAFE_LINK_CHARS}.
  */
 
 /** Illegal in a vault file name on at least one supported platform. */
 const ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|\u0000-\u001F]/gu;
+
+/**
+ * Characters Obsidian calls unsafe: they break wikilinks pointing at the file.
+ *
+ * Taken verbatim from Obsidian's own character set (`# ^ [ ] |`). `|` is
+ * already covered by {@link ILLEGAL_FILENAME_CHARS}; the rest are legal on
+ * disk, which is exactly why they are worth handling -- nothing else will
+ * reject them, and the damage only shows up later as a dead link.
+ */
+const UNSAFE_LINK_CHARS = /[#^\[\]]/gu;
+
+/**
+ * A Markdown heading marker at the very start of a card: `#` to `######`
+ * followed by the space that Markdown requires.
+ *
+ * In a text card this is formatting, not content, so it must not be spent on
+ * the name: `# 项目计划` should name the drawing `项目计划`, not `_ 项目计划`.
+ * The trailing whitespace requirement is what keeps a tag (`#标签`, no space)
+ * out of this rule -- a tag is content and is merely made safe afterwards.
+ */
+const LEADING_HEADING_MARKER = /^#{1,6}[ \t]+/u;
 
 /** Names Windows refuses to create, with or without an extension. */
 const WINDOWS_RESERVED_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
@@ -83,13 +112,28 @@ export function normalizeWhitespace(raw: string): string {
 }
 
 /**
+ * Drops a leading Markdown heading marker, if the text has one.
+ *
+ * @param text - Single-line text, already whitespace-collapsed.
+ * @returns The text without its leading `#`…`######` marker.
+ */
+export function stripLeadingHeadingMarker(text: string): string {
+	return text.replace(LEADING_HEADING_MARKER, "");
+}
+
+/**
  * Derives a drawing name from a text card's body.
+ *
+ * The heading marker is stripped **before** the length cut, so a card reading
+ * `# 项目计划` spends all {@link TEXT_NAME_LENGTH} characters on real content
+ * instead of two of them on `# `.
  *
  * @param text - The card's raw text, potentially multi-line.
  * @returns At most {@link TEXT_NAME_LENGTH} characters, single-line.
  */
 export function deriveNameFromText(text: string): string {
-	return normalizeWhitespace(text).slice(0, TEXT_NAME_LENGTH);
+	const withoutMarker = stripLeadingHeadingMarker(normalizeWhitespace(text));
+	return withoutMarker.slice(0, TEXT_NAME_LENGTH);
 }
 
 /**
@@ -113,18 +157,22 @@ export function deriveNameFromFilePath(vaultPath: string): string {
  * Order matters. Whitespace is collapsed **first**, because newline and tab are
  * themselves control characters in the illegal range -- replacing them before
  * collapsing would turn a blank card into a row of underscores instead of an
- * empty string. Trailing dots/spaces are stripped last, since collapsing can
- * expose a new trailing space.
+ * empty string. The heading marker is dropped next, so it counts as formatting
+ * rather than as a character to replace. Trailing dots/spaces are stripped
+ * last, since collapsing can expose a new trailing space.
+ *
+ * This runs for vault paths too, not just text cards, so a file literally named
+ * `# 计划.md` also yields a linkable name.
  *
  * @param raw - Candidate name, already trimmed of any extension.
  * @returns A safe, meaningful name, or {@link fallbackName} otherwise.
  */
 export function sanitizeBaseName(raw: string): string {
 	const collapsed = normalizeWhitespace(raw);
-	const replaced = collapsed.replace(
-		ILLEGAL_FILENAME_CHARS,
-		ILLEGAL_CHAR_REPLACEMENT
-	);
+	const withoutMarker = stripLeadingHeadingMarker(collapsed);
+	const replaced = withoutMarker
+		.replace(ILLEGAL_FILENAME_CHARS, ILLEGAL_CHAR_REPLACEMENT)
+		.replace(UNSAFE_LINK_CHARS, ILLEGAL_CHAR_REPLACEMENT);
 	const trimmed = replaced.replace(TRAILING_DOT_OR_SPACE, "");
 	if (!isUsableBaseName(trimmed) || MEANINGLESS_NAME.test(trimmed)) {
 		return fallbackName();

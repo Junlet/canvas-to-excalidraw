@@ -426,6 +426,8 @@ function randomHexId() {
 
 // src/naming.ts
 var ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|\u0000-\u001F]/gu;
+var UNSAFE_LINK_CHARS = /[#^\[\]]/gu;
+var LEADING_HEADING_MARKER = /^#{1,6}[ \t]+/u;
 var WINDOWS_RESERVED_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
 var TRAILING_DOT_OR_SPACE = /[. ]+$/u;
 var WHITESPACE_RUN = /\s+/gu;
@@ -441,8 +443,12 @@ var MARKDOWN_SUFFIX = /\.md$/iu;
 function normalizeWhitespace(raw) {
   return raw.replace(WHITESPACE_RUN, " ").trim();
 }
+function stripLeadingHeadingMarker(text) {
+  return text.replace(LEADING_HEADING_MARKER, "");
+}
 function deriveNameFromText(text) {
-  return normalizeWhitespace(text).slice(0, TEXT_NAME_LENGTH);
+  const withoutMarker = stripLeadingHeadingMarker(normalizeWhitespace(text));
+  return withoutMarker.slice(0, TEXT_NAME_LENGTH);
 }
 function deriveNameFromFilePath(vaultPath) {
   var _a;
@@ -452,10 +458,8 @@ function deriveNameFromFilePath(vaultPath) {
 }
 function sanitizeBaseName(raw) {
   const collapsed = normalizeWhitespace(raw);
-  const replaced = collapsed.replace(
-    ILLEGAL_FILENAME_CHARS,
-    ILLEGAL_CHAR_REPLACEMENT
-  );
+  const withoutMarker = stripLeadingHeadingMarker(collapsed);
+  const replaced = withoutMarker.replace(ILLEGAL_FILENAME_CHARS, ILLEGAL_CHAR_REPLACEMENT).replace(UNSAFE_LINK_CHARS, ILLEGAL_CHAR_REPLACEMENT);
   const trimmed = replaced.replace(TRAILING_DOT_OR_SPACE, "");
   if (!isUsableBaseName(trimmed) || MEANINGLESS_NAME.test(trimmed)) {
     return fallbackName();
