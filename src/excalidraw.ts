@@ -28,7 +28,6 @@ import {
 	allowsUpscale,
 	classifyVaultFile,
 	isDrawingFile,
-	wantsSizeAnchor,
 	type DrawingFileProbe,
 	type NonImageMode,
 } from "./attachments";
@@ -399,13 +398,17 @@ export async function createDrawingFromSelection(
 
 				let elementId: string | undefined;
 				try {
-					elementId = await ea.addImage(
-						x,
-						y,
-						file,
-						false,
-						wantsSizeAnchor(kind)
-					);
+					// `anchor` must stay FALSE. Passing true makes Excalidraw
+					// append `|100%` to the stored file reference, which marks
+					// the element `customData.isAnchored` -- and the Excalidraw
+					// plugin's own comment on that flag reads "used by the
+					// Excalidraw component to disable resizing of anchored
+					// images". On top of blocking the resize handles, its
+					// `scaleLoadedImage()` snaps an anchored element back to the
+					// image's natural pixel size on every load, which discards
+					// both the fit applied just below and any resize the user
+					// made in the meantime.
+					elementId = await ea.addImage(x, y, file, false, false);
 				} catch (error) {
 					console.error(
 						"[canvas-to-excalidraw] addImage() failed",

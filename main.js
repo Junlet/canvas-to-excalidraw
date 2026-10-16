@@ -629,9 +629,6 @@ function classifyVaultFile(file, mode, probe) {
 function allowsUpscale(kind) {
   return kind === "image";
 }
-function wantsSizeAnchor(kind) {
-  return kind === "image";
-}
 
 // src/excalidraw.ts
 var EXCALIDRAW_PLUGIN_ID = "obsidian-excalidraw-plugin";
@@ -793,13 +790,7 @@ async function createDrawingFromSelection(app, bridge, options) {
         }
         let elementId;
         try {
-          elementId = await ea.addImage(
-            x,
-            y,
-            file2,
-            false,
-            wantsSizeAnchor(kind)
-          );
+          elementId = await ea.addImage(x, y, file2, false, false);
         } catch (error) {
           console.error(
             "[canvas-to-excalidraw] addImage() failed",

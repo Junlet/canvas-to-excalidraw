@@ -231,19 +231,12 @@ export function allowsUpscale(kind: EmbedKind): boolean {
 	return kind === "image";
 }
 
-/**
- * Whether the source path should be recorded with Excalidraw's `|100%` anchor.
- *
- * Matches the plugin's own `insertMarkdownImage()`, which embeds a rasterised
- * source without the anchor because the snapshot already has the size the
- * render settings asked for.
- *
- * @param kind - The embed kind.
- * @returns True to append `|100%` to the stored file reference.
- */
-export function wantsSizeAnchor(kind: EmbedKind): boolean {
-	return kind === "image";
-}
+// A matching `wantsSizeAnchor()` used to live here, returning true for plain
+// images so they were recorded with Excalidraw's `|100%` anchor. It was removed
+// because that anchor sets `customData.isAnchored`, which disables resizing
+// outright and resets the element to the image's natural pixel size on every
+// load. Drawings created before the change keep the flag in their scene data,
+// so their images stay frozen until re-inserted.
 
 /**
  * Names an embed kind for user-facing text.
