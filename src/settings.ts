@@ -34,6 +34,13 @@ import {
 	normalizeVaultFolder,
 	resolveDrawingFolder,
 } from "./folders";
+import {
+	DEFAULT_IMAGE_SCALE,
+	IMAGE_SCALE_MAX,
+	IMAGE_SCALE_MIN,
+	IMAGE_SCALE_STEP,
+	normalizeImageScale,
+} from "./sizing";
 
 /**
  * The language dropdown rows, in display order.
@@ -128,6 +135,14 @@ export interface CanvasToExcalidrawSettings {
 	drawingFolder: string;
 	/** Whether a `YYYY-MM` sub-folder is appended to {@link drawingFolder}. */
 	monthSubfolders: boolean;
+	/**
+	 * Insertion size for pictures placed into a new drawing, in percent.
+	 *
+	 * `100` keeps each picture at the size of the Canvas node it came from. Only
+	 * plain images honour it: a rasterised note or PDF page is a one-off
+	 * snapshot rendered at a fixed size, and stretching it would only blur it.
+	 */
+	imageScale: number;
 }
 
 /** Excalidraw's own default when no font is specified. */
@@ -193,6 +208,7 @@ export const DEFAULT_SETTINGS: CanvasToExcalidrawSettings = {
 	nonImageMode: DEFAULT_NON_IMAGE_MODE,
 	drawingFolder: DEFAULT_DRAWING_FOLDER,
 	monthSubfolders: DEFAULT_MONTH_SUBFOLDERS,
+	imageScale: DEFAULT_IMAGE_SCALE,
 };
 
 /**
@@ -245,6 +261,7 @@ export function normalizeSettings(
 	if (typeof merged.monthSubfolders !== "boolean") {
 		merged.monthSubfolders = DEFAULT_SETTINGS.monthSubfolders;
 	}
+	merged.imageScale = normalizeImageScale(merged.imageScale);
 	return merged;
 }
 
@@ -343,6 +360,25 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 			});
 
 		this.renderFolderSettings(containerEl);
+
+		new Setting(containerEl)
+			.setName(t("settings.imageScale.name"))
+			.setDesc(t("settings.imageScale.desc"))
+			.addSlider((slider) =>
+				slider
+					.setLimits(
+						IMAGE_SCALE_MIN,
+						IMAGE_SCALE_MAX,
+						IMAGE_SCALE_STEP
+					)
+					.setValue(this.plugin.settings.imageScale)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.imageScale =
+							normalizeImageScale(value);
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
 			.setName(t("settings.font.name"))

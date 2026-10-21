@@ -339,6 +339,7 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 				fontFamily: this.settings.textFontFamily,
 				textColorMode: this.settings.textColorMode,
 				nonImageMode: this.settings.nonImageMode,
+				imageScalePercent: this.settings.imageScale,
 				drawingProbe: this.drawingProbe,
 				internalEdges,
 			});

@@ -137,6 +137,15 @@ const zh = {
 		"开启后，会在上面的路径下再建一个 `YYYY-MM` 文件夹，让每个月的" +
 		"图纸归到一起。当前将会保存到：{path}",
 
+	// -- settings: insertion size -----------------------------------------
+	"settings.imageScale.name": "图片插入尺寸（%）",
+	"settings.imageScale.desc":
+		"100% = 与图片在画布上占用的大小一致。只作用于图片：笔记 / PDF 是" +
+		"一次性渲染的位图，拉伸只会变糊，所以不受这一项影响。" +
+		"图片以左上角为基准放大，调大后可能与旁边的元素重叠。" +
+		"另外：如果一张图纸里只有这一张图，放大后看不出区别 ——" +
+		"Excalidraw 打开时会自动缩放到适应内容。",
+
 	// -- settings: font ---------------------------------------------------
 	"settings.font.name": "文本卡片字体",
 	"settings.font.desc":
@@ -303,6 +312,16 @@ const en: Record<MessageKey, string> = {
 	"settings.folder.monthDesc":
 		"When on, a `YYYY-MM` folder is created under the path above so each " +
 		"month's drawings stay together. Currently saving to: {path}",
+
+	// -- settings: insertion size -----------------------------------------
+	"settings.imageScale.name": "Picture insertion size (%)",
+	"settings.imageScale.desc":
+		"100% = the size the picture took up on the Canvas. Images only: a " +
+		"note or PDF is rasterised once, so stretching it would just blur it. " +
+		"Pictures grow from their top-left corner, so a larger size can overlap " +
+		"neighbouring elements. And if a drawing holds only that one picture, " +
+		"enlarging it makes no visible difference -- Excalidraw zooms to fit " +
+		"when the drawing is opened.",
 
 	// -- settings: font ---------------------------------------------------
 	"settings.font.name": "Text card font",

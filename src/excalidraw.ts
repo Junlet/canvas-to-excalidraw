@@ -22,6 +22,7 @@ import type {
 } from "./types";
 import type { CanvasBounds } from "./canvas";
 import type { InternalEdge } from "./edges";
+import { fitSize } from "./sizing";
 import { t } from "./i18n";
 import { resolveTextColors, type TextColorMode } from "./colors";
 import {
@@ -178,38 +179,37 @@ export function resolveVaultFile(
 /**
  * Rescales a staged picture element to fit the Canvas node's box.
  *
- * `addImage(..., scale = false)` stages the picture at its natural pixel size,
- * so the element's current `width`/`height` *are* the natural dimensions.
- * Fitting them into the node's box preserves the aspect ratio rather than
- * stretching to match a box the user may have resized freely.
+ * The maths lives in `sizing.ts`, where it can be tested without Obsidian.
+ * In short: fit the aspect ratio into the node's box, then apply the user's
+ * insertion size -- but only for embed kinds where enlarging is lossless.
  *
  * @param ea - The ExcalidrawAutomate instance.
  * @param elementId - Id returned by `addImage`.
  * @param boxWidth - Target width, from the Canvas node.
  * @param boxHeight - Target height, from the Canvas node.
  * @param allowUpscale - Whether enlarging is lossless for this embed kind.
+ * @param scale - Insertion-size multiplier from the settings.
  */
 function fitElementToBox(
 	ea: ExcalidrawAutomateLike,
 	elementId: string,
 	boxWidth: number,
 	boxHeight: number,
-	allowUpscale: boolean
+	allowUpscale: boolean,
+	scale: number
 ): void {
 	const element = ea.getElement(elementId);
 	if (!element) return;
-	const naturalWidth = Number(element.width);
-	const naturalHeight = Number(element.height);
-	if (!(naturalWidth > 0) || !(naturalHeight > 0)) return;
-	if (!(boxWidth > 0) || !(boxHeight > 0)) return;
-
-	let ratio = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
-	// A rasterised note or PDF page is a one-off snapshot; never blur it by
-	// stretching it beyond the size it was rendered at.
-	if (!allowUpscale) ratio = Math.min(ratio, 1);
-	if (!Number.isFinite(ratio) || ratio <= 0) return;
-	element.width = naturalWidth * ratio;
-	element.height = naturalHeight * ratio;
+	const fitted = fitSize(
+		Number(element.width),
+		Number(element.height),
+		boxWidth,
+		boxHeight,
+		{ allowUpscale, scale }
+	);
+	if (!fitted) return;
+	element.width = fitted.width;
+	element.height = fitted.height;
 }
 
 /**
@@ -291,6 +291,13 @@ export async function createDrawingFromSelection(
 		 * says `.excalidraw` is not mistaken for a plain note.
 		 */
 		drawingProbe?: DrawingFileProbe;
+		/**
+		 * Insertion size for pictures, in percent of the Canvas node's box.
+		 *
+		 * Only pictures that can be enlarged losslessly (plain images) honour
+		 * it; see `sizing.ts`.
+		 */
+		imageScalePercent: number;
 		/**
 		 * Edges wholly inside the selection, to be recreated as Excalidraw
 		 * arrows binding the corresponding elements.
@@ -425,7 +432,8 @@ export async function createDrawingFromSelection(
 					elementId,
 					node.width,
 					node.height,
-					allowsUpscale(kind)
+					allowsUpscale(kind),
+					options.imageScalePercent / 100
 				);
 				elementIds.set(node.id, elementId);
 				if (kind === "image") {

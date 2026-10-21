@@ -47,6 +47,7 @@ Move the objects selected on an Obsidian Canvas into a **new Excalidraw drawing*
 | 界面语言 | 中文 | 「自动（跟随 Obsidian）」/ 中文 / English |
 | 新建图纸的保存路径 | `Z附件库/Excalidraw` | 留空表示沿用 Excalidraw 插件设置里的目录 |
 | 按月分文件夹 | 开 | 在路径下再建 `YYYY-MM` 子目录。**只作用于本插件转出的图纸** —— Excalidraw 自己的「新建图纸」按钮不走这里 |
+| 图片插入尺寸（%） | 100 | 100 = 与画布上占用的大小一致。**只作用于图片**（笔记/PDF 是位图快照，放大只会糊）；以左上角放大，可能压到相邻元素 |
 | 文本卡片字体 | Lilita One | Excalidraw 的 9 个内置字体 |
 | 文本卡片颜色 | 跟随画布颜色 → 作为文字颜色 | 读取 Obsidian 的 `--canvas-color-1~6` |
 | 命名依据 | 最上面的对象 | 「最上面的」或「最左边的」 |

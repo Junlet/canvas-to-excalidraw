@@ -101,6 +101,9 @@ var zh = {
   "settings.folder.inherited": "（沿用 Excalidraw 插件设置里的目录）",
   "settings.folder.monthName": "按月分文件夹",
   "settings.folder.monthDesc": "开启后，会在上面的路径下再建一个 `YYYY-MM` 文件夹，让每个月的图纸归到一起。当前将会保存到：{path}",
+  // -- settings: insertion size -----------------------------------------
+  "settings.imageScale.name": "图片插入尺寸（%）",
+  "settings.imageScale.desc": "100% = 与图片在画布上占用的大小一致。只作用于图片：笔记 / PDF 是一次性渲染的位图，拉伸只会变糊，所以不受这一项影响。图片以左上角为基准放大，调大后可能与旁边的元素重叠。另外：如果一张图纸里只有这一张图，放大后看不出区别 ——Excalidraw 打开时会自动缩放到适应内容。",
   // -- settings: font ---------------------------------------------------
   "settings.font.name": "文本卡片字体",
   "settings.font.desc": "移入 Excalidraw 的文本卡片使用的字体。这些都是 Excalidraw 内置字体，无需在仓库里放字体文件。注意：内置字体只覆盖拉丁字母，中文会回退到系统字体。",
@@ -200,6 +203,9 @@ var en = {
   "settings.folder.inherited": "(using the folder configured in the Excalidraw plugin)",
   "settings.folder.monthName": "Monthly sub-folders",
   "settings.folder.monthDesc": "When on, a `YYYY-MM` folder is created under the path above so each month's drawings stay together. Currently saving to: {path}",
+  // -- settings: insertion size -----------------------------------------
+  "settings.imageScale.name": "Picture insertion size (%)",
+  "settings.imageScale.desc": "100% = the size the picture took up on the Canvas. Images only: a note or PDF is rasterised once, so stretching it would just blur it. Pictures grow from their top-left corner, so a larger size can overlap neighbouring elements. And if a drawing holds only that one picture, enlarging it makes no visible difference -- Excalidraw zooms to fit when the drawing is opened.",
   // -- settings: font ---------------------------------------------------
   "settings.font.name": "Text card font",
   "settings.font.desc": "Font used by text cards moved into Excalidraw. These are all built-in Excalidraw fonts, so no font files are needed in the vault. Note: the built-in fonts cover Latin letters only, so Chinese falls back to a system font.",
@@ -505,6 +511,31 @@ function resolveUniqueBaseName(baseName, isTaken) {
   return `${baseName} ${Date.now()}`;
 }
 
+// src/sizing.ts
+var IMAGE_SCALE_MIN = 25;
+var IMAGE_SCALE_MAX = 400;
+var DEFAULT_IMAGE_SCALE = 100;
+var IMAGE_SCALE_STEP = 5;
+function normalizeImageScale(value) {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : DEFAULT_IMAGE_SCALE;
+  return Math.min(
+    IMAGE_SCALE_MAX,
+    Math.max(IMAGE_SCALE_MIN, Math.round(numeric))
+  );
+}
+function fitSize(naturalWidth, naturalHeight, boxWidth, boxHeight, options) {
+  if (!(naturalWidth > 0) || !(naturalHeight > 0)) return null;
+  if (!(boxWidth > 0) || !(boxHeight > 0)) return null;
+  let ratio = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
+  if (options.allowUpscale) {
+    ratio *= options.scale > 0 ? options.scale : 1;
+  } else {
+    ratio = Math.min(ratio, 1);
+  }
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+  return { width: naturalWidth * ratio, height: naturalHeight * ratio };
+}
+
 // src/colors.ts
 var CANVAS_COLOR_VARIABLE_PREFIX = "--canvas-color-";
 var CANVAS_PRESET_COUNT = 6;
@@ -686,18 +717,19 @@ function resolveVaultFile(app, vaultPath, sourcePath) {
   if (direct) return direct;
   return app.metadataCache.getFirstLinkpathDest(vaultPath, sourcePath);
 }
-function fitElementToBox(ea, elementId, boxWidth, boxHeight, allowUpscale) {
+function fitElementToBox(ea, elementId, boxWidth, boxHeight, allowUpscale, scale) {
   const element = ea.getElement(elementId);
   if (!element) return;
-  const naturalWidth = Number(element.width);
-  const naturalHeight = Number(element.height);
-  if (!(naturalWidth > 0) || !(naturalHeight > 0)) return;
-  if (!(boxWidth > 0) || !(boxHeight > 0)) return;
-  let ratio = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
-  if (!allowUpscale) ratio = Math.min(ratio, 1);
-  if (!Number.isFinite(ratio) || ratio <= 0) return;
-  element.width = naturalWidth * ratio;
-  element.height = naturalHeight * ratio;
+  const fitted = fitSize(
+    Number(element.width),
+    Number(element.height),
+    boxWidth,
+    boxHeight,
+    { allowUpscale, scale }
+  );
+  if (!fitted) return;
+  element.width = fitted.width;
+  element.height = fitted.height;
 }
 async function waitForVaultFile(app, path) {
   const attempts = Math.ceil(FILE_WAIT_TIMEOUT_MS / FILE_WAIT_INTERVAL_MS);
@@ -807,7 +839,8 @@ async function createDrawingFromSelection(app, bridge, options) {
           elementId,
           node.width,
           node.height,
-          allowsUpscale(kind)
+          allowsUpscale(kind),
+          options.imageScalePercent / 100
         );
         elementIds.set(node.id, elementId);
         if (kind === "image") {
@@ -990,7 +1023,8 @@ var DEFAULT_SETTINGS = {
   textColorMode: DEFAULT_TEXT_COLOR_MODE,
   nonImageMode: DEFAULT_NON_IMAGE_MODE,
   drawingFolder: DEFAULT_DRAWING_FOLDER,
-  monthSubfolders: DEFAULT_MONTH_SUBFOLDERS
+  monthSubfolders: DEFAULT_MONTH_SUBFOLDERS,
+  imageScale: DEFAULT_IMAGE_SCALE
 };
 function isKnownFontFamily(value) {
   return typeof value === "number" && FONT_OPTIONS.some((option) => option.value === value);
@@ -1024,6 +1058,7 @@ function normalizeSettings(stored) {
   if (typeof merged.monthSubfolders !== "boolean") {
     merged.monthSubfolders = DEFAULT_SETTINGS.monthSubfolders;
   }
+  merged.imageScale = normalizeImageScale(merged.imageScale);
   return merged;
 }
 var CanvasToExcalidrawSettingTab = class extends import_obsidian.PluginSettingTab {
@@ -1090,6 +1125,16 @@ var CanvasToExcalidrawSettingTab = class extends import_obsidian.PluginSettingTa
       });
     });
     this.renderFolderSettings(containerEl);
+    new import_obsidian.Setting(containerEl).setName(t("settings.imageScale.name")).setDesc(t("settings.imageScale.desc")).addSlider(
+      (slider) => slider.setLimits(
+        IMAGE_SCALE_MIN,
+        IMAGE_SCALE_MAX,
+        IMAGE_SCALE_STEP
+      ).setValue(this.plugin.settings.imageScale).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.imageScale = normalizeImageScale(value);
+        await this.plugin.saveSettings();
+      })
+    );
     new import_obsidian.Setting(containerEl).setName(t("settings.font.name")).setDesc(t("settings.font.desc")).addDropdown((dropdown) => {
       for (const option of FONT_OPTIONS) {
         dropdown.addOption(
@@ -1352,6 +1397,7 @@ var CanvasToExcalidrawPlugin = class extends import_obsidian2.Plugin {
         fontFamily: this.settings.textFontFamily,
         textColorMode: this.settings.textColorMode,
         nonImageMode: this.settings.nonImageMode,
+        imageScalePercent: this.settings.imageScale,
         drawingProbe: this.drawingProbe,
         internalEdges
       });
