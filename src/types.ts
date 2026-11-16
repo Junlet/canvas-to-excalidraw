@@ -61,6 +61,14 @@ export interface CanvasLike {
 	setData?(data: CanvasData): Promise<void> | void;
 	requestSave?(): Promise<void> | void;
 	getSelectionData?(): CanvasData;
+	/**
+	 * The file view that owns this Canvas.
+	 *
+	 * Only used to force the file to disk: `requestSave()` is debounced and
+	 * returns before anything is written. Typed loosely here because the real
+	 * shape depends on the Obsidian build; `canvasflush.ts` narrows it.
+	 */
+	view?: unknown;
 }
 
 /**

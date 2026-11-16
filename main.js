@@ -25,6 +25,73 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian2 = require("obsidian");
 
+// src/canvasflush.ts
+var FLUSH_ATTEMPTS = 12;
+var FLUSH_INTERVAL_MS = 150;
+function defaultSleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+async function waitForWrite(target, file, marker, baseline, sleep) {
+  for (let attempt = 0; attempt <= FLUSH_ATTEMPTS; attempt += 1) {
+    try {
+      const text = await target.vault.read(file);
+      if (marker ? text.includes(marker) : baseline !== null && text !== baseline) {
+        return true;
+      }
+    } catch (e) {
+    }
+    if (attempt === FLUSH_ATTEMPTS) break;
+    await sleep(FLUSH_INTERVAL_MS);
+  }
+  return false;
+}
+async function flushCanvas(target, marker, sleep = defaultSleep) {
+  const view = target.view;
+  if (!view) return false;
+  const file = view.file;
+  let baseline = null;
+  if (file) {
+    try {
+      baseline = await target.vault.read(file);
+    } catch (e) {
+      baseline = null;
+    }
+  }
+  if (typeof view.saveImmediately === "function") {
+    try {
+      await view.saveImmediately();
+    } catch (error) {
+      console.error(
+        target.logPrefix + "Canvas saveImmediately() failed",
+        error
+      );
+    }
+  }
+  if (!file) return false;
+  if (await waitForWrite(target, file, marker, baseline, sleep)) return true;
+  const payload = typeof view.getViewData === "function" ? view.getViewData() : null;
+  if (typeof payload !== "string") {
+    console.warn(
+      target.logPrefix + "Canvas change could not be confirmed on disk, and the view exposes no serialisation to fall back on."
+    );
+    return false;
+  }
+  try {
+    await target.vault.modify(file, payload);
+  } catch (error) {
+    console.error(
+      target.logPrefix + "Canvas fallback write failed",
+      error
+    );
+    return false;
+  }
+  if (await waitForWrite(target, file, marker, baseline, sleep)) return true;
+  console.warn(
+    target.logPrefix + "Canvas change still not visible on disk after a fallback write."
+  );
+  return false;
+}
+
 // src/i18n.ts
 var zh = {
   // -- console ----------------------------------------------------------
@@ -362,7 +429,8 @@ function hasEditingNode(canvas) {
   }
   return false;
 }
-async function commitCanvasData(canvas, data) {
+async function commitCanvasData(canvas, data, options) {
+  var _a;
   if (typeof canvas.setData !== "function") {
     throw new CanvasUnavailableError(t("error.canvasSetDataMissing"));
   }
@@ -370,6 +438,14 @@ async function commitCanvasData(canvas, data) {
   if (typeof canvas.requestSave === "function") {
     await canvas.requestSave();
   }
+  await flushCanvas(
+    {
+      view: (_a = canvas.view) != null ? _a : null,
+      vault: options.app.vault,
+      logPrefix: "[canvas-to-excalidraw] "
+    },
+    options.marker
+  );
 }
 function readCanvasData(canvas) {
   if (typeof canvas.getData !== "function") {
@@ -1452,10 +1528,16 @@ var CanvasToExcalidrawPlugin = class extends import_obsidian2.Plugin {
       width: Math.max(MIN_REPLACEMENT_DIMENSION, Math.round(bounds.width)),
       height: Math.max(MIN_REPLACEMENT_DIMENSION, Math.round(bounds.height))
     });
-    await commitCanvasData(canvas, {
-      nodes: remainingNodes,
-      edges: reconciliation.edges
-    });
+    await commitCanvasData(
+      canvas,
+      {
+        nodes: remainingNodes,
+        edges: reconciliation.edges
+      },
+      // The new node's id cannot appear in the file before this edit, so it
+      // doubles as proof that the Canvas reached disk.
+      { app: this.app, marker: newNodeId }
+    );
     return reconciliation;
   }
   /**

@@ -18,7 +18,9 @@ import type {
 	CanvasNodeData,
 	CanvasNodeInstanceLike,
 } from "./types";
+import { flushCanvas, type CanvasViewLike } from "./canvasflush";
 import { t } from "./i18n";
+import type { App } from "obsidian";
 
 /**
  * Bounding box of a set of Canvas nodes, in Canvas coordinates.
@@ -195,24 +197,54 @@ export function hasEditingNode(canvas: CanvasLike): boolean {
 	return false;
 }
 
+/** What a Canvas write needs in order to be verified. */
+export interface CommitCanvasOptions {
+	/** Vault access, used to confirm the write landed. */
+	app: App;
+	/**
+	 * Text that must appear in the file once the write landed.
+	 *
+	 * The replacement node's id is ideal: it cannot exist in the file before
+	 * this edit, so its presence proves the write reached disk.
+	 */
+	marker?: string;
+}
+
 /**
- * Writes new Canvas data back and persists it.
+ * Writes new Canvas data back, then makes sure the file really changed.
+ *
+ * `requestSave()` alone is not enough: Obsidian's Canvas view saves on a
+ * 2-second debounce and `requestSave()` returns before anything is written, so
+ * awaiting it proves nothing. Nothing that watches the vault -- sync, backup --
+ * sees the edit until some later save happens to flush it. See `canvasflush.ts`.
  *
  * @param canvas - The Canvas instance.
  * @param data - Full replacement Canvas document.
+ * @param options - Vault access and the marker used to verify the write.
  * @throws {CanvasUnavailableError} When the write API is missing.
  */
 export async function commitCanvasData(
 	canvas: CanvasLike,
-	data: CanvasData
+	data: CanvasData,
+	options: CommitCanvasOptions
 ): Promise<void> {
 	if (typeof canvas.setData !== "function") {
 		throw new CanvasUnavailableError(t("error.canvasSetDataMissing"));
 	}
 	await canvas.setData(data);
 	if (typeof canvas.requestSave === "function") {
+		// Keeps Obsidian's dirty flag and undo history honest. Awaiting it only
+		// covers builds where it happens to return a promise.
 		await canvas.requestSave();
 	}
+	await flushCanvas(
+		{
+			view: (canvas.view ?? null) as CanvasViewLike | null,
+			vault: options.app.vault,
+			logPrefix: "[canvas-to-excalidraw] ",
+		},
+		options.marker
+	);
 }
 
 /**

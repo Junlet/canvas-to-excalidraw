@@ -410,10 +410,16 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 			height: Math.max(MIN_REPLACEMENT_DIMENSION, Math.round(bounds.height)),
 		});
 
-		await commitCanvasData(canvas, {
-			nodes: remainingNodes,
-			edges: reconciliation.edges,
-		});
+		await commitCanvasData(
+			canvas,
+			{
+				nodes: remainingNodes,
+				edges: reconciliation.edges,
+			},
+			// The new node's id cannot appear in the file before this edit, so it
+			// doubles as proof that the Canvas reached disk.
+			{ app: this.app, marker: newNodeId }
+		);
 
 		return reconciliation;
 	}
