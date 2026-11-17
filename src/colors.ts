@@ -145,3 +145,69 @@ export function resolveTextColors(
 
 /** Excalidraw's "no background" value, re-exported for callers resetting state. */
 export const TRANSPARENT_BACKGROUND = TRANSPARENT;
+
+/** `#rgb` or `#rrggbb`. */
+const HEX_COLOUR = /^#([0-9a-f]{3}|[0-9a-f]{6})$/iu;
+
+/** `rgb(r, g, b)` / `rgba(r, g, b, a)`. */
+const RGB_COLOUR = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/iu;
+
+/**
+ * Formats a 0-255 channel as two hex digits.
+ *
+ * @param value - Channel value.
+ * @returns e.g. `"0a"`.
+ */
+function hexPair(value: number): string {
+	return Math.max(0, Math.min(255, Math.round(value)))
+		.toString(16)
+		.padStart(2, "0");
+}
+
+/**
+ * Mixes a colour towards white.
+ *
+ * Canvas preset colours are **saturated** -- they tint a whole card on the
+ * Canvas. Filled straight onto a sticky note they would be loud and would
+ * swallow the dark label text Excalidraw puts on a note. Mixing towards white
+ * gives the pastel tint Obsidian itself applies to a coloured card, and stays a
+ * *concrete* colour: Excalidraw paints fills through the canvas API, which
+ * cannot evaluate `color-mix()`.
+ *
+ * @param colour - A `#rgb`, `#rrggbb` or `rgb()`/`rgba()` value.
+ * @param ratio - How much white to mix in, `0` (unchanged) to `1` (white).
+ * @returns The mixed colour as `#rrggbb`, or null when the input is not a
+ *   colour this can parse -- the caller should then use the colour unchanged.
+ */
+export function lightenColour(colour: string, ratio: number): string | null {
+	const trimmed = colour.trim();
+	let red: number;
+	let green: number;
+	let blue: number;
+
+	const hex = HEX_COLOUR.exec(trimmed);
+	const rgb = hex ? null : RGB_COLOUR.exec(trimmed);
+
+	if (hex) {
+		const digits = hex[1];
+		if (digits.length === 3) {
+			red = Number.parseInt(digits[0] + digits[0], 16);
+			green = Number.parseInt(digits[1] + digits[1], 16);
+			blue = Number.parseInt(digits[2] + digits[2], 16);
+		} else {
+			red = Number.parseInt(digits.slice(0, 2), 16);
+			green = Number.parseInt(digits.slice(2, 4), 16);
+			blue = Number.parseInt(digits.slice(4, 6), 16);
+		}
+	} else if (rgb) {
+		red = Number(rgb[1]);
+		green = Number(rgb[2]);
+		blue = Number(rgb[3]);
+	} else {
+		return null;
+	}
+
+	const amount = Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
+	const mix = (channel: number): number => channel + (255 - channel) * amount;
+	return `#${hexPair(mix(red))}${hexPair(mix(green))}${hexPair(mix(blue))}`;
+}

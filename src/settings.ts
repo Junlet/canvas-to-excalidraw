@@ -41,6 +41,13 @@ import {
 	IMAGE_SCALE_STEP,
 	normalizeImageScale,
 } from "./sizing";
+import {
+	isStickyBackgroundMode,
+	isStickySizeMode,
+	isStickyTextAlign,
+	MIN_STICKY_HEIGHT,
+	MIN_STICKY_WIDTH,
+} from "./sticky";
 
 /**
  * The language dropdown rows, in display order.
@@ -143,6 +150,29 @@ export interface CanvasToExcalidrawSettings {
 	 * snapshot rendered at a fixed size, and stretching it would only blur it.
 	 */
 	imageScale: number;
+
+	/**
+	 * Turn Canvas text cards into Excalidraw sticky notes.
+	 *
+	 * Off by default: a sticky note is a visually different object (a coloured
+	 * container with a fitted label) from the plain text element this plugin
+	 * has always produced, so switching it on is a deliberate choice.
+	 */
+	stickyNoteEnabled: boolean;
+	/** `card` (follow the Canvas card's box) | `fixed`. */
+	stickyNoteSizeMode: string;
+	/** Note width, used when {@link stickyNoteSizeMode} is `fixed`. */
+	stickyNoteWidth: number;
+	/** Note height, used when {@link stickyNoteSizeMode} is `fixed`. */
+	stickyNoteHeight: number;
+	/** Maximum label font size; Excalidraw shrinks it further to fit the note. */
+	stickyNoteFontSize: number;
+	/** `left` | `center` | `right`. */
+	stickyNoteTextAlign: string;
+	/** `follow` (card colour, lightened) | `custom` | `keep`. */
+	stickyNoteBackgroundMode: string;
+	/** Fill used when {@link stickyNoteBackgroundMode} is `custom`. */
+	stickyNoteBackgroundColor: string;
 }
 
 /** Excalidraw's own default when no font is specified. */
@@ -209,7 +239,51 @@ export const DEFAULT_SETTINGS: CanvasToExcalidrawSettings = {
 	drawingFolder: DEFAULT_DRAWING_FOLDER,
 	monthSubfolders: DEFAULT_MONTH_SUBFOLDERS,
 	imageScale: DEFAULT_IMAGE_SCALE,
+
+	stickyNoteEnabled: false,
+	stickyNoteSizeMode: "card",
+	stickyNoteWidth: 240,
+	stickyNoteHeight: 160,
+	stickyNoteFontSize: 20,
+	stickyNoteTextAlign: "left",
+	stickyNoteBackgroundMode: "follow",
+	stickyNoteBackgroundColor: "#ffec99",
 };
+
+/** Highest accepted note dimension, in pixels. */
+const STICKY_NOTE_SIZE_MAX = 600;
+
+/** Range accepted for a note width, in pixels. */
+const STICKY_NOTE_WIDTH_RANGE: readonly [number, number] = [
+	MIN_STICKY_WIDTH,
+	STICKY_NOTE_SIZE_MAX,
+];
+
+/** Range accepted for a note height, in pixels. */
+const STICKY_NOTE_HEIGHT_RANGE: readonly [number, number] = [
+	MIN_STICKY_HEIGHT,
+	STICKY_NOTE_SIZE_MAX,
+];
+
+/** Range accepted for the note's label font size. */
+const STICKY_NOTE_FONT_RANGE: readonly [number, number] = [8, 48];
+
+/**
+ * Coerces a stored number into a range.
+ *
+ * @param value - Raw stored value.
+ * @param range - Lowest and highest accepted values.
+ * @param fallback - Value used when the input is not a number.
+ * @returns A whole number inside the range.
+ */
+function clampNumber(
+	value: unknown,
+	range: readonly [number, number],
+	fallback: number
+): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+	return Math.min(range[1], Math.max(range[0], Math.round(value)));
+}
 
 /**
  * Reports whether a value is one of the known built-in font ids.
@@ -262,6 +336,42 @@ export function normalizeSettings(
 		merged.monthSubfolders = DEFAULT_SETTINGS.monthSubfolders;
 	}
 	merged.imageScale = normalizeImageScale(merged.imageScale);
+
+	if (typeof merged.stickyNoteEnabled !== "boolean") {
+		merged.stickyNoteEnabled = DEFAULT_SETTINGS.stickyNoteEnabled;
+	}
+	if (!isStickySizeMode(merged.stickyNoteSizeMode)) {
+		merged.stickyNoteSizeMode = DEFAULT_SETTINGS.stickyNoteSizeMode;
+	}
+	if (!isStickyTextAlign(merged.stickyNoteTextAlign)) {
+		merged.stickyNoteTextAlign = DEFAULT_SETTINGS.stickyNoteTextAlign;
+	}
+	if (!isStickyBackgroundMode(merged.stickyNoteBackgroundMode)) {
+		merged.stickyNoteBackgroundMode =
+			DEFAULT_SETTINGS.stickyNoteBackgroundMode;
+	}
+	merged.stickyNoteWidth = clampNumber(
+		merged.stickyNoteWidth,
+		STICKY_NOTE_WIDTH_RANGE,
+		DEFAULT_SETTINGS.stickyNoteWidth
+	);
+	merged.stickyNoteHeight = clampNumber(
+		merged.stickyNoteHeight,
+		STICKY_NOTE_HEIGHT_RANGE,
+		DEFAULT_SETTINGS.stickyNoteHeight
+	);
+	merged.stickyNoteFontSize = clampNumber(
+		merged.stickyNoteFontSize,
+		STICKY_NOTE_FONT_RANGE,
+		DEFAULT_SETTINGS.stickyNoteFontSize
+	);
+	if (
+		typeof merged.stickyNoteBackgroundColor !== "string" ||
+		!/^#[0-9a-f]{6}$/iu.test(merged.stickyNoteBackgroundColor.trim())
+	) {
+		merged.stickyNoteBackgroundColor =
+			DEFAULT_SETTINGS.stickyNoteBackgroundColor;
+	}
 	return merged;
 }
 
@@ -333,6 +443,177 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 		refresh();
 	}
 
+	/**
+	 * Renders the sticky-note rows.
+	 *
+	 * Only the rows that currently matter are shown: the two size sliders appear
+	 * for the "fixed" rule, and the colour picker for the "custom" fill. That
+	 * keeps the pane short, and makes the interaction between the rows obvious
+	 * instead of leaving three dead controls on screen.
+	 *
+	 * @param containerEl - The settings pane.
+	 */
+	private renderStickySettings(containerEl: HTMLElement): void {
+		new Setting(containerEl)
+			.setName(t("settings.sticky.sizeMode.name"))
+			.setDesc(t("settings.sticky.sizeMode.desc"))
+			.addDropdown((dropdown) => {
+				dropdown.addOption(
+					"card",
+					t("settings.sticky.sizeMode.card")
+				);
+				dropdown.addOption(
+					"fixed",
+					t("settings.sticky.sizeMode.fixed")
+				);
+				dropdown
+					.setValue(this.plugin.settings.stickyNoteSizeMode)
+					.onChange(async (value) => {
+						this.plugin.settings.stickyNoteSizeMode =
+							isStickySizeMode(value)
+								? value
+								: DEFAULT_SETTINGS.stickyNoteSizeMode;
+						await this.plugin.saveSettings();
+						this.display();
+					});
+			});
+
+		if (this.plugin.settings.stickyNoteSizeMode === "fixed") {
+			this.renderStickySizeSlider(
+				containerEl,
+				t("settings.sticky.width.name"),
+				t("settings.sticky.width.desc"),
+				MIN_STICKY_WIDTH,
+				() => this.plugin.settings.stickyNoteWidth,
+				(value) => {
+					this.plugin.settings.stickyNoteWidth = value;
+				}
+			);
+			this.renderStickySizeSlider(
+				containerEl,
+				t("settings.sticky.height.name"),
+				t("settings.sticky.height.desc"),
+				MIN_STICKY_HEIGHT,
+				() => this.plugin.settings.stickyNoteHeight,
+				(value) => {
+					this.plugin.settings.stickyNoteHeight = value;
+				}
+			);
+		}
+
+		new Setting(containerEl)
+			.setName(t("settings.sticky.fontSize.name"))
+			.setDesc(t("settings.sticky.fontSize.desc"))
+			.addSlider((slider) =>
+				slider
+					.setLimits(
+						STICKY_NOTE_FONT_RANGE[0],
+						STICKY_NOTE_FONT_RANGE[1],
+						1
+					)
+					.setValue(this.plugin.settings.stickyNoteFontSize)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.stickyNoteFontSize = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName(t("settings.sticky.align.name"))
+			.addDropdown((dropdown) => {
+				dropdown.addOption("left", t("settings.sticky.align.left"));
+				dropdown.addOption("center", t("settings.sticky.align.center"));
+				dropdown.addOption("right", t("settings.sticky.align.right"));
+				dropdown
+					.setValue(this.plugin.settings.stickyNoteTextAlign)
+					.onChange(async (value) => {
+						this.plugin.settings.stickyNoteTextAlign =
+							isStickyTextAlign(value)
+								? value
+								: DEFAULT_SETTINGS.stickyNoteTextAlign;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName(t("settings.sticky.background.name"))
+			.setDesc(t("settings.sticky.background.desc"))
+			.addDropdown((dropdown) => {
+				dropdown.addOption(
+					"follow",
+					t("settings.sticky.background.follow")
+				);
+				dropdown.addOption(
+					"custom",
+					t("settings.sticky.background.custom")
+				);
+				dropdown.addOption(
+					"keep",
+					t("settings.sticky.background.keep")
+				);
+				dropdown
+					.setValue(this.plugin.settings.stickyNoteBackgroundMode)
+					.onChange(async (value) => {
+						this.plugin.settings.stickyNoteBackgroundMode =
+							isStickyBackgroundMode(value)
+								? value
+								: DEFAULT_SETTINGS.stickyNoteBackgroundMode;
+						await this.plugin.saveSettings();
+						this.display();
+					});
+			});
+
+		if (this.plugin.settings.stickyNoteBackgroundMode === "custom") {
+			new Setting(containerEl)
+				.setName(t("settings.sticky.color.name"))
+				.addColorPicker((picker) =>
+					picker
+						.setValue(
+							this.plugin.settings.stickyNoteBackgroundColor
+						)
+						.onChange(async (value) => {
+							this.plugin.settings.stickyNoteBackgroundColor =
+								value;
+							await this.plugin.saveSettings();
+						})
+				);
+		}
+	}
+
+	/**
+	 * Renders one note-dimension slider.
+	 *
+	 * @param containerEl - The settings pane.
+	 * @param name - Row label.
+	 * @param desc - Row description.
+	 * @param min - Lowest accepted value; also the slider's lower bound.
+	 * @param read - Reads the current value.
+	 * @param write - Stores the new value.
+	 */
+	private renderStickySizeSlider(
+		containerEl: HTMLElement,
+		name: string,
+		desc: string,
+		min: number,
+		read: () => number,
+		write: (value: number) => void
+	): void {
+		new Setting(containerEl)
+			.setName(name)
+			.setDesc(desc)
+			.addSlider((slider) =>
+				slider
+					.setLimits(min, STICKY_NOTE_SIZE_MAX, 10)
+					.setValue(read())
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						write(value);
+						await this.plugin.saveSettings();
+					})
+			);
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -402,6 +683,26 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
+
+		new Setting(containerEl)
+			.setName(t("settings.sticky.name"))
+			.setDesc(t("settings.sticky.desc"))
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.stickyNoteEnabled)
+					.onChange(async (value) => {
+						this.plugin.settings.stickyNoteEnabled = value;
+						await this.plugin.saveSettings();
+						// Re-render so the dependent rows below follow immediately.
+						this.display();
+					})
+			);
+
+		// The remaining sticky rows only matter once the feature is on, and
+		// hiding them keeps the pane readable when it is off.
+		if (this.plugin.settings.stickyNoteEnabled) {
+			this.renderStickySettings(containerEl);
+		}
 
 		new Setting(containerEl)
 			.setName(t("settings.nonImage.name"))

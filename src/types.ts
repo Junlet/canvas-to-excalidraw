@@ -140,6 +140,31 @@ export interface ExcalidrawAutomateLike {
 		formatting?: Record<string, unknown>,
 		id?: string
 	): string;
+	/**
+	 * Stages a sticky note: a `stickynote` container with a fitted label.
+	 *
+	 * **Optional on purpose.** Sticky notes are a recent Excalidraw feature, so
+	 * an older build simply has no such method; callers must check for it and
+	 * fall back to {@link addText}. Returns the *container's* id -- that is the
+	 * element arrows should bind to, not the label.
+	 *
+	 * Size and appearance come from the workbench style (`ea.style`), so the
+	 * caller sets `backgroundColor` / `fillStyle` before calling.
+	 */
+	addStickyNote?(
+		topX: number,
+		topY: number,
+		text: string,
+		formatting?: {
+			width?: number;
+			height?: number;
+			fontSize?: number;
+			fontFamily?: number;
+			textAlign?: "left" | "center" | "right";
+			textVerticalAlign?: "top" | "middle" | "bottom";
+		},
+		id?: string
+	): string;
 	/** Reads a staged element by id so its geometry can be adjusted. */
 	getElement(id: string): ExcalidrawElementLike | undefined;
 	/**

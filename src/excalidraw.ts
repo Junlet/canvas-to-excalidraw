@@ -26,6 +26,11 @@ import { fitSize } from "./sizing";
 import { t } from "./i18n";
 import { resolveTextColors, type TextColorMode } from "./colors";
 import {
+	buildStickyFormat,
+	resolveStickyBackground,
+	type StickyNoteOptions,
+} from "./sticky";
+import {
 	allowsUpscale,
 	classifyVaultFile,
 	isDrawingFile,
@@ -299,6 +304,14 @@ export async function createDrawingFromSelection(
 		 */
 		imageScalePercent: number;
 		/**
+		 * Sticky-note conversion for text cards, or null to keep them as plain
+		 * text elements.
+		 *
+		 * Ignored (with one console warning) when the installed Excalidraw has
+		 * no `addStickyNote()`.
+		 */
+		stickyNotes: StickyNoteOptions | null;
+		/**
 		 * Edges wholly inside the selection, to be recreated as Excalidraw
 		 * arrows binding the corresponding elements.
 		 */
@@ -325,7 +338,11 @@ export async function createDrawingFromSelection(
 		// otherwise a coloured card would leak its colour into later cards.
 		const defaultStrokeColor = ea.style.strokeColor;
 		const defaultBackgroundColor = ea.style.backgroundColor;
+		const defaultFillStyle = ea.style.fillStyle;
 		ea.style.fontFamily = options.fontFamily;
+
+		/** Warned once per run, not once per card. */
+		let warnedNoSticky = false;
 
 		for (const node of options.nodes) {
 			const x = Math.round(node.x - options.bounds.minX);
@@ -345,6 +362,43 @@ export async function createDrawingFromSelection(
 					colors.strokeColor ?? defaultStrokeColor;
 				ea.style.backgroundColor =
 					colors.backgroundColor ?? defaultBackgroundColor;
+
+				const sticky = options.stickyNotes;
+				if (sticky && typeof ea.addStickyNote === "function") {
+					const format = buildStickyFormat(
+						sticky,
+						node.width,
+						node.height
+					);
+					const fill = resolveStickyBackground(sticky, node.color);
+					if (fill) {
+						ea.style.backgroundColor = fill;
+						// A sticky note is only filled with `solid`; Excalidraw's
+						// default fill style is hachure, which would hatch the note.
+						ea.style.fillStyle = "solid";
+					}
+					let stickyId = "";
+					try {
+						stickyId = ea.addStickyNote(x, y, text, {
+							...format,
+							fontFamily: options.fontFamily,
+						});
+					} finally {
+						// The fill style lives on the shared workbench style, so
+						// restore it or every later node inherits it.
+						ea.style.fillStyle = defaultFillStyle;
+					}
+					if (stickyId) elementIds.set(node.id, stickyId);
+					textCount += 1;
+					continue;
+				}
+				if (sticky && !warnedNoSticky) {
+					warnedNoSticky = true;
+					console.warn(
+						"[canvas-to-excalidraw] this Excalidraw build has no " +
+							"addStickyNote(); text cards fall back to plain text."
+					);
+				}
 
 				const textId = ea.addText(x, y, text, {
 					width: Math.max(Math.round(node.width), MIN_TEXT_WIDTH),

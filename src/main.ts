@@ -340,6 +340,19 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 				textColorMode: this.settings.textColorMode,
 				nonImageMode: this.settings.nonImageMode,
 				imageScalePercent: this.settings.imageScale,
+				stickyNotes: this.settings.stickyNoteEnabled
+					? {
+							sizeMode: this.settings.stickyNoteSizeMode,
+							width: this.settings.stickyNoteWidth,
+							height: this.settings.stickyNoteHeight,
+							fontSize: this.settings.stickyNoteFontSize,
+							textAlign: this.settings.stickyNoteTextAlign,
+							backgroundMode:
+								this.settings.stickyNoteBackgroundMode,
+							backgroundColor:
+								this.settings.stickyNoteBackgroundColor,
+						}
+					: null,
 				drawingProbe: this.drawingProbe,
 				internalEdges,
 			});

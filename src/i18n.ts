@@ -146,6 +146,39 @@ const zh = {
 		"另外：如果一张图纸里只有这一张图，放大后看不出区别 ——" +
 		"Excalidraw 打开时会自动缩放到适应内容。",
 
+	// -- settings: sticky notes -------------------------------------------
+	"settings.sticky.name": "文本卡片转成便签（sticky note）",
+	"settings.sticky.desc":
+		"打开后，移入的文本卡片会变成 Excalidraw 的便签：「一个带底色的" +
+		"卡片 + 自动适配大小的文字」。关闭则保持原来的普通文字元素。" +
+		"便签文字使用下面「文本卡片字体」。",
+	"settings.sticky.sizeMode.name": "便签尺寸",
+	"settings.sticky.sizeMode.desc":
+		"「跟随画布卡片」= 与它在画布上占用的大小一致；「固定尺寸」= 所有" +
+		"便签同样大小。便签是定宽容器，文字放不下时 Excalidraw 会自动" +
+		"缩小字号。",
+	"settings.sticky.sizeMode.card": "跟随画布卡片尺寸",
+	"settings.sticky.sizeMode.fixed": "固定尺寸",
+	"settings.sticky.width.name": "便签宽度（px）",
+	"settings.sticky.width.desc": "仅在「固定尺寸」时生效。",
+	"settings.sticky.height.name": "便签高度（px）",
+	"settings.sticky.height.desc": "仅在「固定尺寸」时生效。",
+	"settings.sticky.fontSize.name": "便签字号",
+	"settings.sticky.fontSize.desc":
+		"便签文字的最大字号。文字放不下时 Excalidraw 会自动缩小它。",
+	"settings.sticky.align.name": "便签文字对齐",
+	"settings.sticky.align.left": "左对齐",
+	"settings.sticky.align.center": "居中",
+	"settings.sticky.align.right": "右对齐",
+	"settings.sticky.background.name": "便签底色",
+	"settings.sticky.background.desc":
+		"「跟随卡片颜色」取卡片预设色并调淡，避免饱和色压住文字；" +
+		"没设过颜色的卡片保持 Excalidraw 默认底色。",
+	"settings.sticky.background.follow": "跟随卡片颜色（淡色）",
+	"settings.sticky.background.custom": "自定义颜色",
+	"settings.sticky.background.keep": "保持默认（不改）",
+	"settings.sticky.color.name": "自定义便签底色",
+
 	// -- settings: font ---------------------------------------------------
 	"settings.font.name": "文本卡片字体",
 	"settings.font.desc":
@@ -322,6 +355,42 @@ const en: Record<MessageKey, string> = {
 		"neighbouring elements. And if a drawing holds only that one picture, " +
 		"enlarging it makes no visible difference -- Excalidraw zooms to fit " +
 		"when the drawing is opened.",
+
+	// -- settings: sticky notes -------------------------------------------
+	"settings.sticky.name": "Turn text cards into sticky notes",
+	"settings.sticky.desc":
+		"When on, a moved text card becomes an Excalidraw sticky note: a " +
+		"coloured card with text that fits itself. When off, the plugin keeps " +
+		"producing a plain text element. Note text uses the text card font " +
+		"below.",
+	"settings.sticky.sizeMode.name": "Note size",
+	"settings.sticky.sizeMode.desc":
+		"\"Follow the Canvas card\" keeps the size it had on the Canvas; " +
+		"\"Fixed size\" gives every note the same box. A note is a fixed-width " +
+		"container, so Excalidraw shrinks the text when it does not fit.",
+	"settings.sticky.sizeMode.card": "Follow the Canvas card",
+	"settings.sticky.sizeMode.fixed": "Fixed size",
+	"settings.sticky.width.name": "Note width (px)",
+	"settings.sticky.width.desc": "Only used with \"Fixed size\".",
+	"settings.sticky.height.name": "Note height (px)",
+	"settings.sticky.height.desc": "Only used with \"Fixed size\".",
+	"settings.sticky.fontSize.name": "Note font size",
+	"settings.sticky.fontSize.desc":
+		"Maximum label size; Excalidraw shrinks it further when the text does " +
+		"not fit.",
+	"settings.sticky.align.name": "Note text alignment",
+	"settings.sticky.align.left": "Left",
+	"settings.sticky.align.center": "Center",
+	"settings.sticky.align.right": "Right",
+	"settings.sticky.background.name": "Note colour",
+	"settings.sticky.background.desc":
+		"\"Follow the card colour\" takes the card's preset colour and " +
+		"lightens it, so a saturated colour cannot swallow the text. A card " +
+		"with no colour keeps Excalidraw's default fill.",
+	"settings.sticky.background.follow": "Follow the card colour (lightened)",
+	"settings.sticky.background.custom": "Custom colour",
+	"settings.sticky.background.keep": "Leave as default",
+	"settings.sticky.color.name": "Custom note colour",
 
 	// -- settings: font ---------------------------------------------------
 	"settings.font.name": "Text card font",

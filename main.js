@@ -171,6 +171,29 @@ var zh = {
   // -- settings: insertion size -----------------------------------------
   "settings.imageScale.name": "图片插入尺寸（%）",
   "settings.imageScale.desc": "100% = 与图片在画布上占用的大小一致。只作用于图片：笔记 / PDF 是一次性渲染的位图，拉伸只会变糊，所以不受这一项影响。图片以左上角为基准放大，调大后可能与旁边的元素重叠。另外：如果一张图纸里只有这一张图，放大后看不出区别 ——Excalidraw 打开时会自动缩放到适应内容。",
+  // -- settings: sticky notes -------------------------------------------
+  "settings.sticky.name": "文本卡片转成便签（sticky note）",
+  "settings.sticky.desc": "打开后，移入的文本卡片会变成 Excalidraw 的便签：「一个带底色的卡片 + 自动适配大小的文字」。关闭则保持原来的普通文字元素。便签文字使用下面「文本卡片字体」。",
+  "settings.sticky.sizeMode.name": "便签尺寸",
+  "settings.sticky.sizeMode.desc": "「跟随画布卡片」= 与它在画布上占用的大小一致；「固定尺寸」= 所有便签同样大小。便签是定宽容器，文字放不下时 Excalidraw 会自动缩小字号。",
+  "settings.sticky.sizeMode.card": "跟随画布卡片尺寸",
+  "settings.sticky.sizeMode.fixed": "固定尺寸",
+  "settings.sticky.width.name": "便签宽度（px）",
+  "settings.sticky.width.desc": "仅在「固定尺寸」时生效。",
+  "settings.sticky.height.name": "便签高度（px）",
+  "settings.sticky.height.desc": "仅在「固定尺寸」时生效。",
+  "settings.sticky.fontSize.name": "便签字号",
+  "settings.sticky.fontSize.desc": "便签文字的最大字号。文字放不下时 Excalidraw 会自动缩小它。",
+  "settings.sticky.align.name": "便签文字对齐",
+  "settings.sticky.align.left": "左对齐",
+  "settings.sticky.align.center": "居中",
+  "settings.sticky.align.right": "右对齐",
+  "settings.sticky.background.name": "便签底色",
+  "settings.sticky.background.desc": "「跟随卡片颜色」取卡片预设色并调淡，避免饱和色压住文字；没设过颜色的卡片保持 Excalidraw 默认底色。",
+  "settings.sticky.background.follow": "跟随卡片颜色（淡色）",
+  "settings.sticky.background.custom": "自定义颜色",
+  "settings.sticky.background.keep": "保持默认（不改）",
+  "settings.sticky.color.name": "自定义便签底色",
   // -- settings: font ---------------------------------------------------
   "settings.font.name": "文本卡片字体",
   "settings.font.desc": "移入 Excalidraw 的文本卡片使用的字体。这些都是 Excalidraw 内置字体，无需在仓库里放字体文件。注意：内置字体只覆盖拉丁字母，中文会回退到系统字体。",
@@ -273,6 +296,29 @@ var en = {
   // -- settings: insertion size -----------------------------------------
   "settings.imageScale.name": "Picture insertion size (%)",
   "settings.imageScale.desc": "100% = the size the picture took up on the Canvas. Images only: a note or PDF is rasterised once, so stretching it would just blur it. Pictures grow from their top-left corner, so a larger size can overlap neighbouring elements. And if a drawing holds only that one picture, enlarging it makes no visible difference -- Excalidraw zooms to fit when the drawing is opened.",
+  // -- settings: sticky notes -------------------------------------------
+  "settings.sticky.name": "Turn text cards into sticky notes",
+  "settings.sticky.desc": "When on, a moved text card becomes an Excalidraw sticky note: a coloured card with text that fits itself. When off, the plugin keeps producing a plain text element. Note text uses the text card font below.",
+  "settings.sticky.sizeMode.name": "Note size",
+  "settings.sticky.sizeMode.desc": '"Follow the Canvas card" keeps the size it had on the Canvas; "Fixed size" gives every note the same box. A note is a fixed-width container, so Excalidraw shrinks the text when it does not fit.',
+  "settings.sticky.sizeMode.card": "Follow the Canvas card",
+  "settings.sticky.sizeMode.fixed": "Fixed size",
+  "settings.sticky.width.name": "Note width (px)",
+  "settings.sticky.width.desc": 'Only used with "Fixed size".',
+  "settings.sticky.height.name": "Note height (px)",
+  "settings.sticky.height.desc": 'Only used with "Fixed size".',
+  "settings.sticky.fontSize.name": "Note font size",
+  "settings.sticky.fontSize.desc": "Maximum label size; Excalidraw shrinks it further when the text does not fit.",
+  "settings.sticky.align.name": "Note text alignment",
+  "settings.sticky.align.left": "Left",
+  "settings.sticky.align.center": "Center",
+  "settings.sticky.align.right": "Right",
+  "settings.sticky.background.name": "Note colour",
+  "settings.sticky.background.desc": `"Follow the card colour" takes the card's preset colour and lightens it, so a saturated colour cannot swallow the text. A card with no colour keeps Excalidraw's default fill.`,
+  "settings.sticky.background.follow": "Follow the card colour (lightened)",
+  "settings.sticky.background.custom": "Custom colour",
+  "settings.sticky.background.keep": "Leave as default",
+  "settings.sticky.color.name": "Custom note colour",
   // -- settings: font ---------------------------------------------------
   "settings.font.name": "Text card font",
   "settings.font.desc": "Font used by text cards moved into Excalidraw. These are all built-in Excalidraw fonts, so no font files are needed in the vault. Note: the built-in fonts cover Latin letters only, so Chinese falls back to a system font.",
@@ -661,6 +707,81 @@ function resolveTextColors(mode, rawColor, doc) {
   }
   return mode === "background" ? { strokeColor: null, backgroundColor: color } : { strokeColor: color, backgroundColor: TRANSPARENT };
 }
+var HEX_COLOUR = /^#([0-9a-f]{3}|[0-9a-f]{6})$/iu;
+var RGB_COLOUR = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/iu;
+function hexPair(value) {
+  return Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0");
+}
+function lightenColour(colour, ratio) {
+  const trimmed = colour.trim();
+  let red;
+  let green;
+  let blue;
+  const hex = HEX_COLOUR.exec(trimmed);
+  const rgb = hex ? null : RGB_COLOUR.exec(trimmed);
+  if (hex) {
+    const digits = hex[1];
+    if (digits.length === 3) {
+      red = Number.parseInt(digits[0] + digits[0], 16);
+      green = Number.parseInt(digits[1] + digits[1], 16);
+      blue = Number.parseInt(digits[2] + digits[2], 16);
+    } else {
+      red = Number.parseInt(digits.slice(0, 2), 16);
+      green = Number.parseInt(digits.slice(2, 4), 16);
+      blue = Number.parseInt(digits.slice(4, 6), 16);
+    }
+  } else if (rgb) {
+    red = Number(rgb[1]);
+    green = Number(rgb[2]);
+    blue = Number(rgb[3]);
+  } else {
+    return null;
+  }
+  const amount = Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
+  const mix = (channel) => channel + (255 - channel) * amount;
+  return `#${hexPair(mix(red))}${hexPair(mix(green))}${hexPair(mix(blue))}`;
+}
+
+// src/sticky.ts
+var STICKY_SIZE_MODES = ["card", "fixed"];
+var STICKY_TEXT_ALIGNS = ["left", "center", "right"];
+var STICKY_BACKGROUND_MODES = ["follow", "custom", "keep"];
+var MIN_STICKY_WIDTH = 120;
+var MIN_STICKY_HEIGHT = 80;
+var FOLLOW_CARD_TINT = 0.78;
+function isStickySizeMode(value) {
+  return typeof value === "string" && STICKY_SIZE_MODES.includes(value);
+}
+function isStickyTextAlign(value) {
+  return typeof value === "string" && STICKY_TEXT_ALIGNS.includes(value);
+}
+function isStickyBackgroundMode(value) {
+  return typeof value === "string" && STICKY_BACKGROUND_MODES.includes(value);
+}
+function finite(value, fallback) {
+  return Number.isFinite(value) ? value : fallback;
+}
+function buildStickyFormat(options, cardWidth, cardHeight) {
+  const useCard = options.sizeMode === "card";
+  const width = useCard ? cardWidth : options.width;
+  const height = useCard ? cardHeight : options.height;
+  return {
+    width: Math.max(MIN_STICKY_WIDTH, Math.round(finite(width, 0))),
+    height: Math.max(MIN_STICKY_HEIGHT, Math.round(finite(height, 0))),
+    fontSize: Math.max(8, Math.round(finite(options.fontSize, 20))),
+    textAlign: isStickyTextAlign(options.textAlign) ? options.textAlign : "left"
+  };
+}
+function resolveStickyBackground(options, rawColor, doc) {
+  var _a;
+  if (options.backgroundMode === "keep") return null;
+  if (options.backgroundMode === "custom") {
+    return options.backgroundColor.trim() || null;
+  }
+  const preset = resolveCanvasPresetColor(rawColor, doc);
+  if (!preset) return null;
+  return (_a = lightenColour(preset, FOLLOW_CARD_TINT)) != null ? _a : preset;
+}
 
 // src/attachments.ts
 var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([
@@ -843,7 +964,9 @@ async function createDrawingFromSelection(app, bridge, options) {
   try {
     const defaultStrokeColor = ea.style.strokeColor;
     const defaultBackgroundColor = ea.style.backgroundColor;
+    const defaultFillStyle = ea.style.fillStyle;
     ea.style.fontFamily = options.fontFamily;
+    let warnedNoSticky = false;
     for (const node of options.nodes) {
       const x = Math.round(node.x - options.bounds.minX);
       const y = Math.round(node.y - options.bounds.minY);
@@ -859,6 +982,37 @@ async function createDrawingFromSelection(app, bridge, options) {
         );
         ea.style.strokeColor = (_a = colors.strokeColor) != null ? _a : defaultStrokeColor;
         ea.style.backgroundColor = (_b = colors.backgroundColor) != null ? _b : defaultBackgroundColor;
+        const sticky = options.stickyNotes;
+        if (sticky && typeof ea.addStickyNote === "function") {
+          const format = buildStickyFormat(
+            sticky,
+            node.width,
+            node.height
+          );
+          const fill = resolveStickyBackground(sticky, node.color);
+          if (fill) {
+            ea.style.backgroundColor = fill;
+            ea.style.fillStyle = "solid";
+          }
+          let stickyId = "";
+          try {
+            stickyId = ea.addStickyNote(x, y, text, {
+              ...format,
+              fontFamily: options.fontFamily
+            });
+          } finally {
+            ea.style.fillStyle = defaultFillStyle;
+          }
+          if (stickyId) elementIds.set(node.id, stickyId);
+          textCount += 1;
+          continue;
+        }
+        if (sticky && !warnedNoSticky) {
+          warnedNoSticky = true;
+          console.warn(
+            "[canvas-to-excalidraw] this Excalidraw build has no addStickyNote(); text cards fall back to plain text."
+          );
+        }
         const textId = ea.addText(x, y, text, {
           width: Math.max(Math.round(node.width), MIN_TEXT_WIDTH)
         });
@@ -1100,8 +1254,30 @@ var DEFAULT_SETTINGS = {
   nonImageMode: DEFAULT_NON_IMAGE_MODE,
   drawingFolder: DEFAULT_DRAWING_FOLDER,
   monthSubfolders: DEFAULT_MONTH_SUBFOLDERS,
-  imageScale: DEFAULT_IMAGE_SCALE
+  imageScale: DEFAULT_IMAGE_SCALE,
+  stickyNoteEnabled: false,
+  stickyNoteSizeMode: "card",
+  stickyNoteWidth: 240,
+  stickyNoteHeight: 160,
+  stickyNoteFontSize: 20,
+  stickyNoteTextAlign: "left",
+  stickyNoteBackgroundMode: "follow",
+  stickyNoteBackgroundColor: "#ffec99"
 };
+var STICKY_NOTE_SIZE_MAX = 600;
+var STICKY_NOTE_WIDTH_RANGE = [
+  MIN_STICKY_WIDTH,
+  STICKY_NOTE_SIZE_MAX
+];
+var STICKY_NOTE_HEIGHT_RANGE = [
+  MIN_STICKY_HEIGHT,
+  STICKY_NOTE_SIZE_MAX
+];
+var STICKY_NOTE_FONT_RANGE = [8, 48];
+function clampNumber(value, range, fallback) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(range[1], Math.max(range[0], Math.round(value)));
+}
 function isKnownFontFamily(value) {
   return typeof value === "number" && FONT_OPTIONS.some((option) => option.value === value);
 }
@@ -1135,6 +1311,36 @@ function normalizeSettings(stored) {
     merged.monthSubfolders = DEFAULT_SETTINGS.monthSubfolders;
   }
   merged.imageScale = normalizeImageScale(merged.imageScale);
+  if (typeof merged.stickyNoteEnabled !== "boolean") {
+    merged.stickyNoteEnabled = DEFAULT_SETTINGS.stickyNoteEnabled;
+  }
+  if (!isStickySizeMode(merged.stickyNoteSizeMode)) {
+    merged.stickyNoteSizeMode = DEFAULT_SETTINGS.stickyNoteSizeMode;
+  }
+  if (!isStickyTextAlign(merged.stickyNoteTextAlign)) {
+    merged.stickyNoteTextAlign = DEFAULT_SETTINGS.stickyNoteTextAlign;
+  }
+  if (!isStickyBackgroundMode(merged.stickyNoteBackgroundMode)) {
+    merged.stickyNoteBackgroundMode = DEFAULT_SETTINGS.stickyNoteBackgroundMode;
+  }
+  merged.stickyNoteWidth = clampNumber(
+    merged.stickyNoteWidth,
+    STICKY_NOTE_WIDTH_RANGE,
+    DEFAULT_SETTINGS.stickyNoteWidth
+  );
+  merged.stickyNoteHeight = clampNumber(
+    merged.stickyNoteHeight,
+    STICKY_NOTE_HEIGHT_RANGE,
+    DEFAULT_SETTINGS.stickyNoteHeight
+  );
+  merged.stickyNoteFontSize = clampNumber(
+    merged.stickyNoteFontSize,
+    STICKY_NOTE_FONT_RANGE,
+    DEFAULT_SETTINGS.stickyNoteFontSize
+  );
+  if (typeof merged.stickyNoteBackgroundColor !== "string" || !/^#[0-9a-f]{6}$/iu.test(merged.stickyNoteBackgroundColor.trim())) {
+    merged.stickyNoteBackgroundColor = DEFAULT_SETTINGS.stickyNoteBackgroundColor;
+  }
   return merged;
 }
 var CanvasToExcalidrawSettingTab = class extends import_obsidian.PluginSettingTab {
@@ -1186,6 +1392,121 @@ var CanvasToExcalidrawSettingTab = class extends import_obsidian.PluginSettingTa
     );
     refresh();
   }
+  /**
+   * Renders the sticky-note rows.
+   *
+   * Only the rows that currently matter are shown: the two size sliders appear
+   * for the "fixed" rule, and the colour picker for the "custom" fill. That
+   * keeps the pane short, and makes the interaction between the rows obvious
+   * instead of leaving three dead controls on screen.
+   *
+   * @param containerEl - The settings pane.
+   */
+  renderStickySettings(containerEl) {
+    new import_obsidian.Setting(containerEl).setName(t("settings.sticky.sizeMode.name")).setDesc(t("settings.sticky.sizeMode.desc")).addDropdown((dropdown) => {
+      dropdown.addOption(
+        "card",
+        t("settings.sticky.sizeMode.card")
+      );
+      dropdown.addOption(
+        "fixed",
+        t("settings.sticky.sizeMode.fixed")
+      );
+      dropdown.setValue(this.plugin.settings.stickyNoteSizeMode).onChange(async (value) => {
+        this.plugin.settings.stickyNoteSizeMode = isStickySizeMode(value) ? value : DEFAULT_SETTINGS.stickyNoteSizeMode;
+        await this.plugin.saveSettings();
+        this.display();
+      });
+    });
+    if (this.plugin.settings.stickyNoteSizeMode === "fixed") {
+      this.renderStickySizeSlider(
+        containerEl,
+        t("settings.sticky.width.name"),
+        t("settings.sticky.width.desc"),
+        MIN_STICKY_WIDTH,
+        () => this.plugin.settings.stickyNoteWidth,
+        (value) => {
+          this.plugin.settings.stickyNoteWidth = value;
+        }
+      );
+      this.renderStickySizeSlider(
+        containerEl,
+        t("settings.sticky.height.name"),
+        t("settings.sticky.height.desc"),
+        MIN_STICKY_HEIGHT,
+        () => this.plugin.settings.stickyNoteHeight,
+        (value) => {
+          this.plugin.settings.stickyNoteHeight = value;
+        }
+      );
+    }
+    new import_obsidian.Setting(containerEl).setName(t("settings.sticky.fontSize.name")).setDesc(t("settings.sticky.fontSize.desc")).addSlider(
+      (slider) => slider.setLimits(
+        STICKY_NOTE_FONT_RANGE[0],
+        STICKY_NOTE_FONT_RANGE[1],
+        1
+      ).setValue(this.plugin.settings.stickyNoteFontSize).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.stickyNoteFontSize = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName(t("settings.sticky.align.name")).addDropdown((dropdown) => {
+      dropdown.addOption("left", t("settings.sticky.align.left"));
+      dropdown.addOption("center", t("settings.sticky.align.center"));
+      dropdown.addOption("right", t("settings.sticky.align.right"));
+      dropdown.setValue(this.plugin.settings.stickyNoteTextAlign).onChange(async (value) => {
+        this.plugin.settings.stickyNoteTextAlign = isStickyTextAlign(value) ? value : DEFAULT_SETTINGS.stickyNoteTextAlign;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName(t("settings.sticky.background.name")).setDesc(t("settings.sticky.background.desc")).addDropdown((dropdown) => {
+      dropdown.addOption(
+        "follow",
+        t("settings.sticky.background.follow")
+      );
+      dropdown.addOption(
+        "custom",
+        t("settings.sticky.background.custom")
+      );
+      dropdown.addOption(
+        "keep",
+        t("settings.sticky.background.keep")
+      );
+      dropdown.setValue(this.plugin.settings.stickyNoteBackgroundMode).onChange(async (value) => {
+        this.plugin.settings.stickyNoteBackgroundMode = isStickyBackgroundMode(value) ? value : DEFAULT_SETTINGS.stickyNoteBackgroundMode;
+        await this.plugin.saveSettings();
+        this.display();
+      });
+    });
+    if (this.plugin.settings.stickyNoteBackgroundMode === "custom") {
+      new import_obsidian.Setting(containerEl).setName(t("settings.sticky.color.name")).addColorPicker(
+        (picker) => picker.setValue(
+          this.plugin.settings.stickyNoteBackgroundColor
+        ).onChange(async (value) => {
+          this.plugin.settings.stickyNoteBackgroundColor = value;
+          await this.plugin.saveSettings();
+        })
+      );
+    }
+  }
+  /**
+   * Renders one note-dimension slider.
+   *
+   * @param containerEl - The settings pane.
+   * @param name - Row label.
+   * @param desc - Row description.
+   * @param min - Lowest accepted value; also the slider's lower bound.
+   * @param read - Reads the current value.
+   * @param write - Stores the new value.
+   */
+  renderStickySizeSlider(containerEl, name, desc, min, read, write) {
+    new import_obsidian.Setting(containerEl).setName(name).setDesc(desc).addSlider(
+      (slider) => slider.setLimits(min, STICKY_NOTE_SIZE_MAX, 10).setValue(read()).setDynamicTooltip().onChange(async (value) => {
+        write(value);
+        await this.plugin.saveSettings();
+      })
+    );
+  }
   display() {
     const { containerEl } = this;
     containerEl.empty();
@@ -1226,6 +1547,16 @@ var CanvasToExcalidrawSettingTab = class extends import_obsidian.PluginSettingTa
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian.Setting(containerEl).setName(t("settings.sticky.name")).setDesc(t("settings.sticky.desc")).addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.stickyNoteEnabled).onChange(async (value) => {
+        this.plugin.settings.stickyNoteEnabled = value;
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    if (this.plugin.settings.stickyNoteEnabled) {
+      this.renderStickySettings(containerEl);
+    }
     new import_obsidian.Setting(containerEl).setName(t("settings.nonImage.name")).setDesc(t("settings.nonImage.desc")).addDropdown((dropdown) => {
       dropdown.addOption("skip", t("settings.nonImage.skip"));
       dropdown.addOption(
@@ -1474,6 +1805,15 @@ var CanvasToExcalidrawPlugin = class extends import_obsidian2.Plugin {
         textColorMode: this.settings.textColorMode,
         nonImageMode: this.settings.nonImageMode,
         imageScalePercent: this.settings.imageScale,
+        stickyNotes: this.settings.stickyNoteEnabled ? {
+          sizeMode: this.settings.stickyNoteSizeMode,
+          width: this.settings.stickyNoteWidth,
+          height: this.settings.stickyNoteHeight,
+          fontSize: this.settings.stickyNoteFontSize,
+          textAlign: this.settings.stickyNoteTextAlign,
+          backgroundMode: this.settings.stickyNoteBackgroundMode,
+          backgroundColor: this.settings.stickyNoteBackgroundColor
+        } : null,
         drawingProbe: this.drawingProbe,
         internalEdges
       });
