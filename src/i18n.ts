@@ -91,6 +91,7 @@ const zh = {
 	"skip.notEmbedded": "{kind}未嵌入（已在设置里关闭）：{name}",
 	"skip.unsupportedType": "不支持的文件类型，已跳过：{name}",
 	"skip.renderFailed": "渲染失败，已跳过：{name}",
+	"skip.embedNotAPicture": "卡片里嵌入的不是图片，已跳过：{path}",
 	"skip.linkCard": "链接卡片",
 	"skip.unsupportedNode": "不支持的节点类型：{type}",
 	"skip.arrowEndpointMissing": "一条箭头因端点未移入而省略",
@@ -178,6 +179,16 @@ const zh = {
 	"settings.sticky.background.custom": "自定义颜色",
 	"settings.sticky.background.keep": "保持默认（不改）",
 	"settings.sticky.color.name": "自定义便签底色",
+
+	// -- settings: embeds inside a text card ------------------------------
+	"settings.cardEmbed.name": "文本卡片里的图片",
+	"settings.cardEmbed.desc":
+		"文本卡片是 Markdown，可以内嵌图片（![[图片.png]]）。" +
+		"但 Excalidraw 的文字元素不解析 Markdown —— 不处理的话图纸里会直接" +
+		"出现「![[图片.png]]」这串字符。",
+	"settings.cardEmbed.image": "把图片放到卡片下方（推荐）",
+	"settings.cardEmbed.text": "只留文件名，不插图片",
+	"settings.cardEmbed.keep": "原样保留（会出现 Markdown 标记）",
 
 	// -- settings: font ---------------------------------------------------
 	"settings.font.name": "文本卡片字体",
@@ -297,6 +308,7 @@ const en: Record<MessageKey, string> = {
 	"skip.notEmbedded": "{kind} was not embedded (turned off in settings): {name}",
 	"skip.unsupportedType": "unsupported file type, skipped: {name}",
 	"skip.renderFailed": "rendering failed, skipped: {name}",
+	"skip.embedNotAPicture": "the embed inside the card is not a picture, skipped: {path}",
 	"skip.linkCard": "link card",
 	"skip.unsupportedNode": "unsupported node type: {type}",
 	"skip.arrowEndpointMissing":
@@ -391,6 +403,17 @@ const en: Record<MessageKey, string> = {
 	"settings.sticky.background.custom": "Custom colour",
 	"settings.sticky.background.keep": "Leave as default",
 	"settings.sticky.color.name": "Custom note colour",
+
+	// -- settings: embeds inside a text card ------------------------------
+	"settings.cardEmbed.name": "Pictures inside text cards",
+	"settings.cardEmbed.desc":
+		"A text card is Markdown, so it can embed pictures " +
+		"(![[picture.png]]). An Excalidraw text element does not render " +
+		"Markdown -- left alone, the drawing would literally show " +
+		"\"![[picture.png]]\".",
+	"settings.cardEmbed.image": "Place the picture below the card (recommended)",
+	"settings.cardEmbed.text": "Keep only the file name",
+	"settings.cardEmbed.keep": "Leave it as written (markers will show)",
 
 	// -- settings: font ---------------------------------------------------
 	"settings.font.name": "Text card font",

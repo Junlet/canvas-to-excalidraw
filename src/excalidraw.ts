@@ -23,6 +23,7 @@ import type {
 import type { CanvasBounds } from "./canvas";
 import type { InternalEdge } from "./edges";
 import { fitSize } from "./sizing";
+import { extractCardEmbeds } from "./cardcontent";
 import { t } from "./i18n";
 import { resolveTextColors, type TextColorMode } from "./colors";
 import {
@@ -34,6 +35,7 @@ import {
 	allowsUpscale,
 	classifyVaultFile,
 	isDrawingFile,
+	isPictureFile,
 	type DrawingFileProbe,
 	type NonImageMode,
 } from "./attachments";
@@ -276,6 +278,84 @@ function toConnectionPoint(side: string | undefined): ConnectionPointLike {
  * @throws {NothingToMoveError} When no node in the selection is movable.
  * @throws {ExcalidrawUnavailableError} When the drawing file never materialises.
  */
+/** Vertical gap between a text card and the pictures pulled out of it. */
+const CARD_EMBED_GAP = 20;
+
+/**
+ * Places the pictures embedded in a text card.
+ *
+ * Each target is resolved against the vault and then checked: only real
+ * pictures are placed, because rasterising a note or a PDF just because a card
+ * linked one would be a surprise. Anything unresolvable, or not a picture, is
+ * reported through `skipped` -- an honest omission beats a label that literally
+ * reads `![[file.png]]`.
+ *
+ * Pictures are stacked downwards from `startY`, each fitted into a square of the
+ * card's width so a wide picture cannot stretch past the card.
+ *
+ * @param app - The Obsidian app.
+ * @param ea - The ExcalidrawAutomate instance.
+ * @param targets - Embed targets, in source order.
+ * @param x - Left edge to place at.
+ * @param startY - Top edge of the first picture.
+ * @param width - The card's width; also the fitting box for each picture.
+ * @param options - Source path (for link resolution) and insertion size.
+ * @param skipped - Receives one human-readable reason per picture not placed.
+ * @returns How many pictures were placed, and the Y below the last one.
+ */
+async function placeCardEmbeds(
+	app: App,
+	ea: ExcalidrawAutomateLike,
+	targets: string[],
+	x: number,
+	startY: number,
+	width: number,
+	options: { sourcePath: string; imageScalePercent: number },
+	skipped: string[]
+): Promise<{ placed: number; bottom: number }> {
+	let cursor = startY;
+	let placed = 0;
+
+	for (const target of targets) {
+		const file = resolveVaultFile(app, target, options.sourcePath);
+		if (!file || !isPictureFile(file)) {
+			skipped.push(t("skip.embedNotAPicture", { path: target }));
+			continue;
+		}
+
+		let elementId: string | undefined;
+		try {
+			elementId = await ea.addImage(x, cursor, file, false, false);
+		} catch (error) {
+			console.error(
+				"[canvas-to-excalidraw] addImage() failed for an embedded picture",
+				file.path,
+				error
+			);
+		}
+		if (!elementId) {
+			skipped.push(t("skip.renderFailed", { name: file.name }));
+			continue;
+		}
+
+		fitElementToBox(
+			ea,
+			elementId,
+			width,
+			width,
+			true,
+			options.imageScalePercent / 100
+		);
+		const height = Number(ea.getElement(elementId)?.height);
+		cursor +=
+			(Number.isFinite(height) && height > 0 ? height : width) +
+			CARD_EMBED_GAP;
+		placed += 1;
+	}
+
+	return { placed, bottom: cursor };
+}
+
 export async function createDrawingFromSelection(
 	app: App,
 	bridge: ExcalidrawBridge,
@@ -311,6 +391,13 @@ export async function createDrawingFromSelection(
 		 * no `addStickyNote()`.
 		 */
 		stickyNotes: StickyNoteOptions | null;
+		/**
+		 * What to do with Markdown picture embeds inside a text card.
+		 *
+		 * `"keep"` copies the marker as text, `"text"` reduces it to a file
+		 * name, `"image"` places the picture itself; see `cardcontent.ts`.
+		 */
+		textCardEmbedMode: string;
 		/**
 		 * Edges wholly inside the selection, to be recreated as Excalidraw
 		 * arrows binding the corresponding elements.
@@ -349,11 +436,44 @@ export async function createDrawingFromSelection(
 			const y = Math.round(node.y - options.bounds.minY);
 
 			if (node.type === "text") {
-				const text = typeof node.text === "string" ? node.text : "";
-				if (text.trim().length === 0) {
+				const raw = typeof node.text === "string" ? node.text : "";
+				if (raw.trim().length === 0) {
 					skipped.push(t("skip.emptyTextCard"));
 					continue;
 				}
+
+				// A card is Markdown and can embed pictures, which a text
+				// element cannot render; the markers are handled first so both
+				// the text and the pictures can be placed.
+				const content = extractCardEmbeds(
+					raw,
+					options.textCardEmbedMode
+				);
+				const boxWidth = Math.max(
+					Math.round(node.width),
+					MIN_TEXT_WIDTH
+				);
+
+				if (content.text.trim().length === 0) {
+					// Nothing but pictures: no text element to create.
+					const only = await placeCardEmbeds(
+						app,
+						ea,
+						content.targets,
+						x,
+						y,
+						boxWidth,
+						options,
+						skipped
+					);
+					if (only.placed > 0) {
+						imageCount += only.placed;
+						continue;
+					}
+					skipped.push(t("skip.emptyTextCard"));
+					continue;
+				}
+
 				const colors = resolveTextColors(
 					options.textColorMode,
 					node.color
@@ -379,7 +499,7 @@ export async function createDrawingFromSelection(
 					}
 					let stickyId = "";
 					try {
-						stickyId = ea.addStickyNote(x, y, text, {
+						stickyId = ea.addStickyNote(x, y, content.text, {
 							...format,
 							fontFamily: options.fontFamily,
 						});
@@ -389,22 +509,34 @@ export async function createDrawingFromSelection(
 						ea.style.fillStyle = defaultFillStyle;
 					}
 					if (stickyId) elementIds.set(node.id, stickyId);
-					textCount += 1;
-					continue;
+				} else {
+					if (sticky && !warnedNoSticky) {
+						warnedNoSticky = true;
+						console.warn(
+							"[canvas-to-excalidraw] this Excalidraw build has no " +
+								"addStickyNote(); text cards fall back to plain text."
+						);
+					}
+					const textId = ea.addText(x, y, content.text, {
+						width: boxWidth,
+					});
+					if (textId) elementIds.set(node.id, textId);
 				}
-				if (sticky && !warnedNoSticky) {
-					warnedNoSticky = true;
-					console.warn(
-						"[canvas-to-excalidraw] this Excalidraw build has no " +
-							"addStickyNote(); text cards fall back to plain text."
-					);
-				}
-
-				const textId = ea.addText(x, y, text, {
-					width: Math.max(Math.round(node.width), MIN_TEXT_WIDTH),
-				});
-				if (textId) elementIds.set(node.id, textId);
 				textCount += 1;
+
+				// Pictures pulled out of the card go directly below it, so the
+				// drawing keeps what the card showed.
+				const placed = await placeCardEmbeds(
+					app,
+					ea,
+					content.targets,
+					x,
+					y + Math.max(Math.round(node.height), 0) + CARD_EMBED_GAP,
+					boxWidth,
+					options,
+					skipped
+				);
+				imageCount += placed.placed;
 				continue;
 			}
 

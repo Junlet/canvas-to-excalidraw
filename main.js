@@ -136,6 +136,7 @@ var zh = {
   "skip.notEmbedded": "{kind}未嵌入（已在设置里关闭）：{name}",
   "skip.unsupportedType": "不支持的文件类型，已跳过：{name}",
   "skip.renderFailed": "渲染失败，已跳过：{name}",
+  "skip.embedNotAPicture": "卡片里嵌入的不是图片，已跳过：{path}",
   "skip.linkCard": "链接卡片",
   "skip.unsupportedNode": "不支持的节点类型：{type}",
   "skip.arrowEndpointMissing": "一条箭头因端点未移入而省略",
@@ -194,6 +195,12 @@ var zh = {
   "settings.sticky.background.custom": "自定义颜色",
   "settings.sticky.background.keep": "保持默认（不改）",
   "settings.sticky.color.name": "自定义便签底色",
+  // -- settings: embeds inside a text card ------------------------------
+  "settings.cardEmbed.name": "文本卡片里的图片",
+  "settings.cardEmbed.desc": "文本卡片是 Markdown，可以内嵌图片（![[图片.png]]）。但 Excalidraw 的文字元素不解析 Markdown —— 不处理的话图纸里会直接出现「![[图片.png]]」这串字符。",
+  "settings.cardEmbed.image": "把图片放到卡片下方（推荐）",
+  "settings.cardEmbed.text": "只留文件名，不插图片",
+  "settings.cardEmbed.keep": "原样保留（会出现 Markdown 标记）",
   // -- settings: font ---------------------------------------------------
   "settings.font.name": "文本卡片字体",
   "settings.font.desc": "移入 Excalidraw 的文本卡片使用的字体。这些都是 Excalidraw 内置字体，无需在仓库里放字体文件。注意：内置字体只覆盖拉丁字母，中文会回退到系统字体。",
@@ -266,6 +273,7 @@ var en = {
   "skip.notEmbedded": "{kind} was not embedded (turned off in settings): {name}",
   "skip.unsupportedType": "unsupported file type, skipped: {name}",
   "skip.renderFailed": "rendering failed, skipped: {name}",
+  "skip.embedNotAPicture": "the embed inside the card is not a picture, skipped: {path}",
   "skip.linkCard": "link card",
   "skip.unsupportedNode": "unsupported node type: {type}",
   "skip.arrowEndpointMissing": "an arrow was omitted because one of its endpoints was not moved",
@@ -319,6 +327,12 @@ var en = {
   "settings.sticky.background.custom": "Custom colour",
   "settings.sticky.background.keep": "Leave as default",
   "settings.sticky.color.name": "Custom note colour",
+  // -- settings: embeds inside a text card ------------------------------
+  "settings.cardEmbed.name": "Pictures inside text cards",
+  "settings.cardEmbed.desc": 'A text card is Markdown, so it can embed pictures (![[picture.png]]). An Excalidraw text element does not render Markdown -- left alone, the drawing would literally show "![[picture.png]]".',
+  "settings.cardEmbed.image": "Place the picture below the card (recommended)",
+  "settings.cardEmbed.text": "Keep only the file name",
+  "settings.cardEmbed.keep": "Leave it as written (markers will show)",
   // -- settings: font ---------------------------------------------------
   "settings.font.name": "Text card font",
   "settings.font.desc": "Font used by text cards moved into Excalidraw. These are all built-in Excalidraw fonts, so no font files are needed in the vault. Note: the built-in fonts cover Latin letters only, so Chinese falls back to a system font.",
@@ -658,6 +672,65 @@ function fitSize(naturalWidth, naturalHeight, boxWidth, boxHeight, options) {
   return { width: naturalWidth * ratio, height: naturalHeight * ratio };
 }
 
+// src/cardcontent.ts
+var EMBED_MODES = ["keep", "text", "image"];
+function isEmbedMode(value) {
+  return typeof value === "string" && EMBED_MODES.includes(value);
+}
+var WIKI_EMBED_TRIM = /[ \t]*!\[\[([^\]]+)\]\]/gu;
+var WIKI_EMBED = /!\[\[([^\]]+)\]\]/gu;
+var MARKDOWN_EMBED_TRIM = /[ \t]*!\[([^\]]*)\]\(([^)]+)\)/gu;
+var MARKDOWN_EMBED = /!\[([^\]]*)\]\(([^)]+)\)/gu;
+var PATH_SEPARATOR = /[\\/]/u;
+var MARKDOWN_TITLE = /\s+["'][^"']*["']$/u;
+function stripMarkdownTitle(url) {
+  return url.replace(MARKDOWN_TITLE, "").trim();
+}
+function embedDisplayName(target) {
+  var _a, _b;
+  const withoutSubpath = target.split("#")[0].split("?")[0].trim();
+  if (withoutSubpath.length === 0) return "";
+  const segments = withoutSubpath.split(PATH_SEPARATOR);
+  return (_b = (_a = segments[segments.length - 1]) == null ? void 0 : _a.trim()) != null ? _b : "";
+}
+function wikiTarget(body) {
+  return body.split("|")[0].split("#")[0].trim();
+}
+function tidy(text) {
+  return text.replace(/\r\n/gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
+}
+function extractCardEmbeds(raw, mode) {
+  if (!isEmbedMode(mode) || mode === "keep") {
+    return { text: raw, targets: [] };
+  }
+  const targets = [];
+  const replaceWiki = (body) => {
+    if (mode === "image") {
+      const target = wikiTarget(body);
+      if (target.length > 0) targets.push(target);
+      return "";
+    }
+    const name = embedDisplayName(wikiTarget(body));
+    return name.length > 0 ? name : "";
+  };
+  const replaceMarkdown = (alt, url) => {
+    const bare = stripMarkdownTitle(url);
+    if (mode === "image") {
+      if (bare.length > 0) targets.push(bare);
+      return "";
+    }
+    const name = alt.trim() || embedDisplayName(bare);
+    return name.length > 0 ? name : "";
+  };
+  const wikiPattern = mode === "image" ? WIKI_EMBED_TRIM : WIKI_EMBED;
+  const markdownPattern = mode === "image" ? MARKDOWN_EMBED_TRIM : MARKDOWN_EMBED;
+  const text = raw.replace(wikiPattern, (_match, body) => replaceWiki(body)).replace(
+    markdownPattern,
+    (_match, alt, url) => replaceMarkdown(alt, url)
+  );
+  return { text: tidy(text), targets };
+}
+
 // src/colors.ts
 var CANVAS_COLOR_VARIABLE_PREFIX = "--canvas-color-";
 var CANVAS_PRESET_COUNT = 6;
@@ -854,6 +927,9 @@ function classifyVaultFile(file, mode, probe) {
   }
   return null;
 }
+function isPictureFile(file) {
+  return IMAGE_EXTENSIONS.has((file.extension || "").toLowerCase());
+}
 function allowsUpscale(kind) {
   return kind === "image";
 }
@@ -950,6 +1026,45 @@ function toConnectionPoint(side) {
       return null;
   }
 }
+var CARD_EMBED_GAP = 20;
+async function placeCardEmbeds(app, ea, targets, x, startY, width, options, skipped) {
+  var _a;
+  let cursor = startY;
+  let placed = 0;
+  for (const target of targets) {
+    const file = resolveVaultFile(app, target, options.sourcePath);
+    if (!file || !isPictureFile(file)) {
+      skipped.push(t("skip.embedNotAPicture", { path: target }));
+      continue;
+    }
+    let elementId;
+    try {
+      elementId = await ea.addImage(x, cursor, file, false, false);
+    } catch (error) {
+      console.error(
+        "[canvas-to-excalidraw] addImage() failed for an embedded picture",
+        file.path,
+        error
+      );
+    }
+    if (!elementId) {
+      skipped.push(t("skip.renderFailed", { name: file.name }));
+      continue;
+    }
+    fitElementToBox(
+      ea,
+      elementId,
+      width,
+      width,
+      true,
+      options.imageScalePercent / 100
+    );
+    const height = Number((_a = ea.getElement(elementId)) == null ? void 0 : _a.height);
+    cursor += (Number.isFinite(height) && height > 0 ? height : width) + CARD_EMBED_GAP;
+    placed += 1;
+  }
+  return { placed, bottom: cursor };
+}
 async function createDrawingFromSelection(app, bridge, options) {
   var _a, _b, _c;
   const { ea } = bridge;
@@ -971,8 +1086,34 @@ async function createDrawingFromSelection(app, bridge, options) {
       const x = Math.round(node.x - options.bounds.minX);
       const y = Math.round(node.y - options.bounds.minY);
       if (node.type === "text") {
-        const text = typeof node.text === "string" ? node.text : "";
-        if (text.trim().length === 0) {
+        const raw = typeof node.text === "string" ? node.text : "";
+        if (raw.trim().length === 0) {
+          skipped.push(t("skip.emptyTextCard"));
+          continue;
+        }
+        const content = extractCardEmbeds(
+          raw,
+          options.textCardEmbedMode
+        );
+        const boxWidth = Math.max(
+          Math.round(node.width),
+          MIN_TEXT_WIDTH
+        );
+        if (content.text.trim().length === 0) {
+          const only = await placeCardEmbeds(
+            app,
+            ea,
+            content.targets,
+            x,
+            y,
+            boxWidth,
+            options,
+            skipped
+          );
+          if (only.placed > 0) {
+            imageCount += only.placed;
+            continue;
+          }
           skipped.push(t("skip.emptyTextCard"));
           continue;
         }
@@ -996,7 +1137,7 @@ async function createDrawingFromSelection(app, bridge, options) {
           }
           let stickyId = "";
           try {
-            stickyId = ea.addStickyNote(x, y, text, {
+            stickyId = ea.addStickyNote(x, y, content.text, {
               ...format,
               fontFamily: options.fontFamily
             });
@@ -1004,20 +1145,30 @@ async function createDrawingFromSelection(app, bridge, options) {
             ea.style.fillStyle = defaultFillStyle;
           }
           if (stickyId) elementIds.set(node.id, stickyId);
-          textCount += 1;
-          continue;
+        } else {
+          if (sticky && !warnedNoSticky) {
+            warnedNoSticky = true;
+            console.warn(
+              "[canvas-to-excalidraw] this Excalidraw build has no addStickyNote(); text cards fall back to plain text."
+            );
+          }
+          const textId = ea.addText(x, y, content.text, {
+            width: boxWidth
+          });
+          if (textId) elementIds.set(node.id, textId);
         }
-        if (sticky && !warnedNoSticky) {
-          warnedNoSticky = true;
-          console.warn(
-            "[canvas-to-excalidraw] this Excalidraw build has no addStickyNote(); text cards fall back to plain text."
-          );
-        }
-        const textId = ea.addText(x, y, text, {
-          width: Math.max(Math.round(node.width), MIN_TEXT_WIDTH)
-        });
-        if (textId) elementIds.set(node.id, textId);
         textCount += 1;
+        const placed = await placeCardEmbeds(
+          app,
+          ea,
+          content.targets,
+          x,
+          y + Math.max(Math.round(node.height), 0) + CARD_EMBED_GAP,
+          boxWidth,
+          options,
+          skipped
+        );
+        imageCount += placed.placed;
         continue;
       }
       if (node.type === "file") {
@@ -1262,7 +1413,8 @@ var DEFAULT_SETTINGS = {
   stickyNoteFontSize: 20,
   stickyNoteTextAlign: "left",
   stickyNoteBackgroundMode: "follow",
-  stickyNoteBackgroundColor: "#ffec99"
+  stickyNoteBackgroundColor: "#ffec99",
+  textCardEmbedMode: "image"
 };
 var STICKY_NOTE_SIZE_MAX = 600;
 var STICKY_NOTE_WIDTH_RANGE = [
@@ -1340,6 +1492,9 @@ function normalizeSettings(stored) {
   );
   if (typeof merged.stickyNoteBackgroundColor !== "string" || !/^#[0-9a-f]{6}$/iu.test(merged.stickyNoteBackgroundColor.trim())) {
     merged.stickyNoteBackgroundColor = DEFAULT_SETTINGS.stickyNoteBackgroundColor;
+  }
+  if (!isEmbedMode(merged.textCardEmbedMode)) {
+    merged.textCardEmbedMode = DEFAULT_SETTINGS.textCardEmbedMode;
   }
   return merged;
 }
@@ -1557,6 +1712,17 @@ var CanvasToExcalidrawSettingTab = class extends import_obsidian.PluginSettingTa
     if (this.plugin.settings.stickyNoteEnabled) {
       this.renderStickySettings(containerEl);
     }
+    new import_obsidian.Setting(containerEl).setName(t("settings.cardEmbed.name")).setDesc(t("settings.cardEmbed.desc")).addDropdown((dropdown) => {
+      dropdown.addOption("image", t("settings.cardEmbed.image"));
+      dropdown.addOption("text", t("settings.cardEmbed.text"));
+      dropdown.addOption("keep", t("settings.cardEmbed.keep"));
+      dropdown.setValue(this.plugin.settings.textCardEmbedMode).onChange(async (value) => {
+        this.plugin.settings.textCardEmbedMode = isEmbedMode(
+          value
+        ) ? value : DEFAULT_SETTINGS.textCardEmbedMode;
+        await this.plugin.saveSettings();
+      });
+    });
     new import_obsidian.Setting(containerEl).setName(t("settings.nonImage.name")).setDesc(t("settings.nonImage.desc")).addDropdown((dropdown) => {
       dropdown.addOption("skip", t("settings.nonImage.skip"));
       dropdown.addOption(
@@ -1814,6 +1980,7 @@ var CanvasToExcalidrawPlugin = class extends import_obsidian2.Plugin {
           backgroundMode: this.settings.stickyNoteBackgroundMode,
           backgroundColor: this.settings.stickyNoteBackgroundColor
         } : null,
+        textCardEmbedMode: this.settings.textCardEmbedMode,
         drawingProbe: this.drawingProbe,
         internalEdges
       });

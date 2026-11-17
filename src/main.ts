@@ -353,6 +353,7 @@ export default class CanvasToExcalidrawPlugin extends Plugin {
 								this.settings.stickyNoteBackgroundColor,
 						}
 					: null,
+				textCardEmbedMode: this.settings.textCardEmbedMode,
 				drawingProbe: this.drawingProbe,
 				internalEdges,
 			});

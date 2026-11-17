@@ -48,6 +48,7 @@ import {
 	MIN_STICKY_HEIGHT,
 	MIN_STICKY_WIDTH,
 } from "./sticky";
+import { isEmbedMode } from "./cardcontent";
 
 /**
  * The language dropdown rows, in display order.
@@ -173,6 +174,18 @@ export interface CanvasToExcalidrawSettings {
 	stickyNoteBackgroundMode: string;
 	/** Fill used when {@link stickyNoteBackgroundMode} is `custom`. */
 	stickyNoteBackgroundColor: string;
+
+	/**
+	 * What to do with Markdown picture embeds inside a text card.
+	 *
+	 * `keep` copies the marker verbatim, `text` reduces it to the file name,
+	 * `image` places the picture below the card.
+	 *
+	 * Defaults to `image`, because a text element renders no Markdown: the
+	 * marker would otherwise appear in the drawing as literal
+	 * `![[file.png]]`, which is what this setting exists to fix.
+	 */
+	textCardEmbedMode: string;
 }
 
 /** Excalidraw's own default when no font is specified. */
@@ -248,6 +261,7 @@ export const DEFAULT_SETTINGS: CanvasToExcalidrawSettings = {
 	stickyNoteTextAlign: "left",
 	stickyNoteBackgroundMode: "follow",
 	stickyNoteBackgroundColor: "#ffec99",
+	textCardEmbedMode: "image",
 };
 
 /** Highest accepted note dimension, in pixels. */
@@ -371,6 +385,9 @@ export function normalizeSettings(
 	) {
 		merged.stickyNoteBackgroundColor =
 			DEFAULT_SETTINGS.stickyNoteBackgroundColor;
+	}
+	if (!isEmbedMode(merged.textCardEmbedMode)) {
+		merged.textCardEmbedMode = DEFAULT_SETTINGS.textCardEmbedMode;
 	}
 	return merged;
 }
@@ -703,6 +720,25 @@ export class CanvasToExcalidrawSettingTab extends PluginSettingTab {
 		if (this.plugin.settings.stickyNoteEnabled) {
 			this.renderStickySettings(containerEl);
 		}
+
+		new Setting(containerEl)
+			.setName(t("settings.cardEmbed.name"))
+			.setDesc(t("settings.cardEmbed.desc"))
+			.addDropdown((dropdown) => {
+				dropdown.addOption("image", t("settings.cardEmbed.image"));
+				dropdown.addOption("text", t("settings.cardEmbed.text"));
+				dropdown.addOption("keep", t("settings.cardEmbed.keep"));
+				dropdown
+					.setValue(this.plugin.settings.textCardEmbedMode)
+					.onChange(async (value) => {
+						this.plugin.settings.textCardEmbedMode = isEmbedMode(
+							value
+						)
+							? value
+							: DEFAULT_SETTINGS.textCardEmbedMode;
+						await this.plugin.saveSettings();
+					});
+			});
 
 		new Setting(containerEl)
 			.setName(t("settings.nonImage.name"))

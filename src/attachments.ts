@@ -217,6 +217,21 @@ export function classifyVaultFile(
 }
 
 /**
+ * Reports whether a file is a picture this plugin can hand to `addImage()`.
+ *
+ * Used for Markdown embeds found *inside* a text card, where only real pictures
+ * make sense: quietly rasterising a note or a PDF because a card happened to
+ * link one would be a surprise. A card's file nodes go through
+ * {@link classifyVaultFile} instead, which honours the non-image policy.
+ *
+ * @param file - Candidate vault file.
+ * @returns True for a picture extension.
+ */
+export function isPictureFile(file: TFile): boolean {
+	return IMAGE_EXTENSIONS.has((file.extension || "").toLowerCase());
+}
+
+/**
  * Whether the element's size may be scaled **up** to fill the Canvas node's box.
  *
  * Photographs and diagrams can be enlarged freely: Excalidraw keeps the original
